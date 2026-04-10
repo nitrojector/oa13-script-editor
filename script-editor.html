@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GameScript Editor</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1a2e; --surface: #16213e; --surface2: #0f3460;
+    --accent: #e94560; --accent2: #0f3460; --text: #eaeaea;
+    --text2: #a0a8b8; --border: #2a3a5e; --hover: #1e2d4e;
+    --warn: #f5a623; --success: #4caf50; --danger: #e94560;
+    --card-radius: 8px;
+    --type-boss: #e74c3c; --type-pig: #e67e22; --type-senator: #9b59b6;
+    --type-player: #3498db; --type-minigame: #1abc9c; --type-decision: #f1c40f;
+    --type-branch: #e91e63; --type-day: #607d8b; --type-end: #455a64;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Toolbar */
+  #toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  #toolbar h1 { font-size: 1rem; font-weight: 600; color: var(--text); margin-right: 8px; }
+  #toolbar .spacer { flex: 1; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 500; transition: opacity 0.15s, transform 0.1s; }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--hover); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-warn { background: var(--warn); color: #1a1a1a; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #version-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+
+  /* Split Layout */
+  #main { display: flex; flex: 1; overflow: hidden; }
+  #left-panel { width: 420px; min-width: 280px; max-width: 60vw; display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; flex-shrink: 0; }
+  #right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Resizer */
+  #resizer { width: 5px; background: var(--border); cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
+  #resizer:hover, #resizer.dragging { background: var(--accent); }
+
+  /* Left panel header */
+  #left-header { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  #left-header-row1 { display: flex; align-items: center; gap: 6px; }
+  #left-header-row1 span { font-size: 0.8rem; color: var(--text2); }
+  #left-header-row1 .spacer { flex: 1; }
+  #left-header-row2 { display: flex; flex-wrap: wrap; gap: 4px; }
+  .btn-sm { padding: 4px 10px; font-size: 0.76rem; }
+  .btn-type { font-size: 0.68rem; font-weight: 700; padding: 3px 8px; border-radius: 10px; border: none; cursor: pointer; text-transform: uppercase; letter-spacing: 0.03em; color: #fff; opacity: 0.88; transition: opacity 0.15s, transform 0.1s; }
+  .btn-type:hover { opacity: 1; transform: scale(1.06); }
+  .btn-type:active { transform: scale(0.96); }
+  .btn-type.type-decision { color: #1a1a1a; }
+
+  /* Entry list */
+  #entry-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  #entry-list::-webkit-scrollbar { width: 6px; }
+  #entry-list::-webkit-scrollbar-track { background: transparent; }
+  #entry-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Entry card */
+  .entry-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--card-radius); overflow: hidden; transition: border-color 0.15s; flex-shrink: 0; }
+  .entry-card.selected { border-color: var(--accent); }
+  .entry-card.highlighted { border-color: var(--warn); box-shadow: 0 0 0 2px rgba(245,166,35,0.2); }
+
+  .entry-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; user-select: none; }
+  .entry-header:hover { background: var(--hover); }
+
+  .drag-handle { color: var(--text2); font-size: 0.8rem; cursor: grab; padding: 0 4px; }
+  .drag-handle:active { cursor: grabbing; }
+
+  .type-badge { font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #fff; flex-shrink: 0; }
+  .type-boss    { background: var(--type-boss); }
+  .type-pig     { background: var(--type-pig); }
+  .type-senator { background: var(--type-senator); }
+  .type-player  { background: var(--type-player); }
+  .type-minigame { background: var(--type-minigame); }
+  .type-decision { background: var(--type-decision); color: #1a1a1a; }
+  .type-branch  { background: var(--type-branch); }
+  .type-day     { background: var(--type-day); }
+  .type-end     { background: var(--type-end); }
+
+  .entry-uid { font-size: 0.72rem; color: var(--text2); font-family: monospace; }
+  .entry-preview { flex: 1; font-size: 0.78rem; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .entry-index { font-size: 0.7rem; color: var(--text2); margin-left: auto; flex-shrink: 0; }
+  .collapse-icon { font-size: 0.7rem; color: var(--text2); transition: transform 0.2s; }
+  .entry-card.expanded .collapse-icon { transform: rotate(180deg); }
+
+  /* Entry body (edit form) */
+  .entry-body { padding: 12px; border-top: 1px solid var(--border); display: none; flex-direction: column; gap: 10px; }
+  .entry-card.expanded .entry-body { display: flex; }
+
+  .field-row { display: flex; flex-direction: column; gap: 4px; }
+  .field-row label { font-size: 0.73rem; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-row input, .field-row select, .field-row textarea { background: var(--bg); border: 1px solid var(--border); border-radius: 5px; color: var(--text); padding: 6px 10px; font-size: 0.82rem; font-family: inherit; width: 100%; transition: border-color 0.15s; }
+  .field-row input:focus, .field-row select:focus, .field-row textarea:focus { outline: none; border-color: var(--accent); }
+  .field-row textarea { min-height: 60px; resize: vertical; }
+  .field-row input[type=number] { width: 100px; }
+
+  .field-row-inline { display: flex; gap: 10px; }
+  .field-row-inline .field-row { flex: 1; }
+
+  /* Options editor (decision) */
+  .options-list { display: flex; flex-direction: column; gap: 6px; }
+  .option-item { background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .option-item-header { display: flex; align-items: center; gap: 8px; }
+  .option-item-header span { font-size: 0.72rem; color: var(--text2); }
+  .btn-icon { background: none; border: none; color: var(--text2); cursor: pointer; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; }
+  .btn-icon:hover { color: var(--danger); background: rgba(233,69,96,0.1); }
+  .btn-icon.add:hover { color: var(--success); background: rgba(76,175,80,0.1); }
+
+  /* Branch editor */
+  .branches-list { display: flex; flex-direction: column; gap: 6px; }
+  .branch-item { background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 8px; display: flex; align-items: center; gap: 8px; }
+  .branch-item label { font-size: 0.72rem; color: var(--text2); white-space: nowrap; }
+  .branch-item input { flex: 1; }
+
+  /* Entry actions */
+  .entry-actions { display: flex; gap: 6px; margin-top: 4px; }
+
+  /* Right panel (graph + warnings) */
+  #right-panel { flex-direction: row !important; }
+  #graph-section { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  #graph-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+  #graph-header span { font-size: 0.8rem; color: var(--text2); }
+  .layout-opts { display: flex; align-items: center; gap: 4px; }
+  .layout-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); width: 28px; height: 24px; border-radius: 5px; cursor: pointer; font-size: 0.82rem; display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
+  .layout-btn:hover { background: var(--hover); color: var(--text); }
+  .layout-btn.active { background: var(--accent2); border-color: #4a6fa5; color: var(--text); }
+  .layout-sep { width: 1px; height: 16px; background: var(--border); margin: 0 2px; }
+  .layout-label { font-size: 0.72rem; color: var(--text2); }
+  .layout-opts input[type=number] { width: 46px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; color: var(--text); padding: 3px 6px; font-size: 0.76rem; }
+  #graph-container { flex: 1; overflow: hidden; position: relative; }
+  #graph-svg { width: 100%; height: 100%; cursor: grab; }
+  #graph-svg:active { cursor: grabbing; }
+  #graph-controls { position: absolute; bottom: 12px; right: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .graph-ctrl-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text); width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; }
+  .graph-ctrl-btn:hover { background: var(--hover); }
+
+  /* Warnings panel */
+  #warnings-panel { width: 280px; min-width: 280px; display: flex; flex-direction: column; border-left: 1px solid var(--border); overflow: hidden; flex-shrink: 0; }
+  #warnings-panel.hidden { display: none; }
+  #warnings-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  #warnings-header span { font-size: 0.8rem; color: var(--text2); flex: 1; }
+  #warnings-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  #warnings-list::-webkit-scrollbar { width: 6px; }
+  #warnings-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .warn-item { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; transition: border-color 0.15s; }
+  .warn-item:hover { border-color: var(--warn); }
+  .warn-item.severity-error { border-left: 3px solid var(--danger); }
+  .warn-item.severity-warn  { border-left: 3px solid var(--warn); }
+  .warn-item .warn-title { font-size: 0.75rem; font-weight: 600; color: var(--text); }
+  .warn-item .warn-desc  { font-size: 0.7rem; color: var(--text2); line-height: 1.4; }
+  .warn-empty { font-size: 0.78rem; color: var(--text2); text-align: center; padding: 20px 0; }
+  #warn-btn { transition: background 0.15s, color 0.15s; }
+  #warn-btn.has-warnings { background: var(--warn); color: #1a1a1a; border-color: var(--warn); }
+  #warn-btn.has-warnings:hover { background: #e09520; border-color: #e09520; }
+
+  /* Modal / Dialog */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .modal-overlay.hidden { display: none; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; max-width: 480px; width: 90%; }
+  .modal h2 { font-size: 1rem; margin-bottom: 10px; }
+  .modal p { font-size: 0.85rem; color: var(--text2); line-height: 1.5; margin-bottom: 16px; }
+  .modal .modal-warn { color: var(--warn); font-weight: 500; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* Toast */
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px 20px; border-radius: 20px; font-size: 0.82rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 2000; }
+  #toast.show { opacity: 1; }
+  #toast.warn { border-color: var(--warn); color: var(--warn); }
+  #toast.error { border-color: var(--danger); color: var(--danger); }
+  #toast.success { border-color: var(--success); color: var(--success); }
+
+  /* Drag-over indicator */
+  .entry-card.drag-over { border-color: var(--accent); background: var(--hover); }
+  .entry-card.dragging-source { opacity: 0.4; }
+  .focus-graph-btn { color: var(--text2); font-size: 0.85rem; flex-shrink: 0; }
+  .focus-graph-btn:hover { color: #7ecfff; background: rgba(126,207,255,0.1); }
+
+  /* Graph node styles */
+  .graph-node { cursor: pointer; }
+  .graph-node rect { transition: filter 0.15s; }
+  .graph-node:hover rect { filter: brightness(1.3); }
+  .graph-node.selected-node rect { stroke-width: 2.5 !important; }
+
+  /* iuid / bid hints */
+  .field-hint { font-size: 0.68rem; color: var(--text2); font-family: monospace; margin-top: 2px; opacity: 0.75; padding-left: 2px; }
+  .field-hint span { color: #7ecfff; }
+  .field-hint.field-error { color: var(--warn); opacity: 1; }
+  .field-hint.field-error span { color: var(--warn); }
+  .uid-warn-icon { color: var(--warn); font-size: 0.78rem; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<!-- Toolbar -->
+<div id="toolbar">
+  <h1>&#9654; GameScript Editor</h1>
+  <span id="version-badge">v2</span>
+  <div class="spacer"></div>
+  <button class="btn btn-secondary" onclick="importScript()">&#8593; Import</button>
+  <button class="btn btn-success" onclick="exportScript()">&#8595; Export</button>
+  <input type="file" id="file-input" accept=".json" style="display:none" onchange="handleFileImport(event)">
+</div>
+
+<!-- Main split -->
+<div id="main">
+  <div id="left-panel">
+    <div id="left-header">
+      <div id="left-header-row1">
+        <span id="entry-count">0 entries</span>
+        <div class="spacer"></div>
+        <button class="btn btn-secondary btn-sm" onclick="expandAll()" title="Expand all">&#9660;&#9660;</button>
+        <button class="btn btn-secondary btn-sm" onclick="foldAll()"   title="Fold all">&#9650;&#9650;</button>
+      </div>
+      <div id="left-header-row2">
+        <span style="font-size:0.68rem;color:var(--text2);align-self:center;margin-right:2px">+</span>
+        <button class="btn-type type-boss"     onclick="addEntryOfType('boss')"     style="background:var(--type-boss)">boss</button>
+        <button class="btn-type type-pig"      onclick="addEntryOfType('pig')"      style="background:var(--type-pig)">pig</button>
+        <button class="btn-type type-senator"  onclick="addEntryOfType('senator')"  style="background:var(--type-senator)">senator</button>
+        <button class="btn-type type-player"   onclick="addEntryOfType('player')"   style="background:var(--type-player)">player</button>
+        <button class="btn-type type-minigame" onclick="addEntryOfType('minigame')" style="background:var(--type-minigame)">minigame</button>
+        <button class="btn-type type-decision" onclick="addEntryOfType('decision')" style="background:var(--type-decision)">decision</button>
+        <button class="btn-type type-branch"   onclick="addEntryOfType('branch')"   style="background:var(--type-branch)">branch</button>
+        <button class="btn-type type-day"      onclick="addEntryOfType('day')"      style="background:var(--type-day)">day</button>
+        <button class="btn-type type-end"      onclick="addEntryOfType('end')"      style="background:var(--type-end)">end</button>
+      </div>
+    </div>
+    <div id="entry-list"></div>
+  </div>
+  <div id="resizer"></div>
+  <div id="right-panel">
+    <div id="graph-section">
+      <div id="graph-header">
+        <span>Graph Preview</span>
+        <div class="layout-opts">
+          <button id="layout-v" class="layout-btn active" onclick="setGraphDirection('vertical')"  title="Vertical layout">&#8597;</button>
+          <button id="layout-h" class="layout-btn"        onclick="setGraphDirection('horizontal')" title="Horizontal layout">&#8596;</button>
+          <div class="layout-sep"></div>
+          <span class="layout-label">Wrap</span>
+          <input type="number" id="layout-wrap" min="0" max="99" value="0" title="Wrap every N layers (0 = off)" oninput="setGraphWrap(this.value)">
+        </div>
+        <div class="spacer"></div>
+        <span id="graph-info" style="font-size:0.75rem;color:var(--text2)"></span>
+        <button id="warn-btn" class="btn btn-secondary btn-sm" onclick="toggleWarnings()">
+          &#9888; Warnings
+        </button>
+      </div>
+      <div id="graph-container">
+        <svg id="graph-svg"></svg>
+        <div id="graph-controls">
+          <button class="graph-ctrl-btn" onclick="graphZoom(1.2)" title="Zoom In">+</button>
+          <button class="graph-ctrl-btn" onclick="graphZoom(0.8)" title="Zoom Out">&#8722;</button>
+          <button class="graph-ctrl-btn" onclick="graphFit()" title="Fit">&#9654;</button>
+        </div>
+      </div>
+    </div>
+    <div id="warnings-panel" class="hidden">
+      <div id="warnings-header">
+        <span>Warnings</span>
+        <button class="btn-icon" onclick="toggleWarnings()" title="Close">&#10005;</button>
+      </div>
+      <div id="warnings-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Export dialog -->
+<div id="export-dialog" class="modal-overlay hidden">
+  <div class="modal" style="max-width:380px">
+    <h2>Export Script</h2>
+    <div id="export-warn-box" style="display:none;background:rgba(245,166,35,0.1);border:1px solid var(--warn);border-radius:6px;padding:10px 12px;margin:12px 0 4px">
+      <div style="font-size:0.75rem;font-weight:700;color:var(--warn);margin-bottom:6px">&#9888; Script has warnings</div>
+      <div id="export-warn-list" style="font-size:0.72rem;color:var(--text2);line-height:1.6;max-height:120px;overflow-y:auto"></div>
+    </div>
+    <div class="field-row" style="margin-bottom:16px;margin-top:12px">
+      <label>Filename</label>
+      <div style="display:flex;align-items:center;gap:0">
+        <input type="text" id="export-filename" value="script" style="border-radius:5px 0 0 5px;border-right:none;flex:1"
+               onkeydown="if(event.key==='Enter')doExport()" spellcheck="false">
+        <span style="background:var(--surface2);border:1px solid var(--border);border-radius:0 5px 5px 0;padding:6px 10px;font-size:0.82rem;color:var(--text2);white-space:nowrap">.json</span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeExportDialog()">Cancel</button>
+      <button class="btn btn-success" onclick="doExport()">Export</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2 id="modal-title"></h2>
+    <p id="modal-body"></p>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ============================================================
+//  State
+// ============================================================
+let scriptData = { version: 2, script: [] };
+let selectedIndex = null;
+let _uidCounter = 0;
+
+function genUid() { return 'iuid-' + (++_uidCounter) + '-' + Math.random().toString(36).slice(2,7); }
+function iuidOf(idx) { return 'iuid-' + (idx + 1); }
+
+function resolveNextHint(idx) {
+  const entry = scriptData.script[idx];
+  const val = entry.next || '';
+  if (!val) {
+    const ni = idx + 1;
+    if (ni >= scriptData.script.length) return '&#8627; <span>end of script</span>';
+    const ne = scriptData.script[ni];
+    const nid = ne.uid ? ` (${ne.uid})` : ` (${iuidOf(ni)})`;
+    return `&#8627; <span>#${ni} ${ne.type}${nid}</span>`;
+  }
+  const found = scriptData.script.findIndex(e => e.uid === val);
+  if (found === -1) return `&#8627; <span style="color:var(--danger)">unresolved uid</span>`;
+  const ne = scriptData.script[found];
+  return `&#8627; <span>#${found} ${ne.type}</span>`;
+}
+
+// ============================================================
+//  Type definitions
+// ============================================================
+const TYPES = ['boss','pig','senator','player','minigame','decision','branch','day','end'];
+const TYPE_HAS_MSG   = new Set(['boss','pig','senator','player','minigame']);
+const TYPE_HAS_NEXT  = new Set(['boss','pig','senator','player','minigame','decision','day']);
+const TYPE_KEEPS_UID = true;
+
+function defaultEntry(type) {
+  const base = { uid: '', type };
+  if (TYPE_HAS_MSG.has(type)) base.msg = '';
+  if (TYPE_HAS_NEXT.has(type)) base.next = '';
+  if (type === 'minigame') { base.gameId = 0; base.winBid = 1; base.loseBid = 0; }
+  if (type === 'decision') { base.options = [{ msg: '', effect: 0, bid: 0 }]; }
+  if (type === 'branch') { base.branches = [{ bid: 0, next: '' }, { bid: 1, next: '' }]; }
+  return base;
+}
+
+function getEntryPreview(e) {
+  if (e.msg) return stripTags(e.msg).slice(0, 60);
+  if (e.type === 'decision') return `${(e.options||[]).length} option(s)`;
+  if (e.type === 'branch')   return `${(e.branches||[]).length} branch(es)`;
+  if (e.type === 'day')      return 'End of day';
+  if (e.type === 'end')      return 'Game over';
+  return '';
+}
+
+function stripTags(s) { return (s||'').replace(/<[^>]+>/g,''); }
+
+// ============================================================
+//  Render left panel
+// ============================================================
+function refreshUidValidation() {
+  const issues = computeUidIssues(scriptData.script);
+  scriptData.script.forEach((e, i) => {
+    const badge = document.getElementById(`uid-badge-${i}`);
+    const warn  = document.getElementById(`uid-warn-${i}`);
+    const input = document.getElementById(`uid-input-${i}`);
+    const error = document.getElementById(`uid-error-${i}`);
+    if (badge) { badge.textContent = e.uid || ''; badge.style.display = e.uid ? '' : 'none'; }
+    if (warn)  { warn.style.display = issues[i] ? '' : 'none'; warn.title = issues[i] || ''; }
+    if (input) { input.style.borderColor = issues[i] ? 'var(--warn)' : ''; }
+    if (error) { error.style.display = issues[i] ? '' : 'none'; error.querySelector('span').textContent = issues[i] || ''; }
+  });
+  renderGraph();
+}
+
+function computeUidIssues(entries) {
+  const issues = {};
+  const seen = {};
+  const reserved = /^iuid-\d+$/;
+  entries.forEach((e, i) => {
+    if (!e.uid) return;
+    if (reserved.test(e.uid)) {
+      issues[i] = 'reserved format — iuid-N is internal only';
+    } else if (seen[e.uid] !== undefined) {
+      const first = seen[e.uid];
+      issues[i] = `duplicate uid (also #${first})`;
+      if (!issues[first]) issues[first] = `duplicate uid (also #${i})`;
+    } else {
+      seen[e.uid] = i;
+    }
+  });
+  return issues;
+}
+
+function renderList() {
+  const list = document.getElementById('entry-list');
+  const entries = scriptData.script;
+  document.getElementById('entry-count').textContent = `${entries.length} entr${entries.length===1?'y':'ies'}`;
+
+  const uidIssues = computeUidIssues(entries);
+
+  // Preserve expanded state
+  const expanded = new Set();
+  list.querySelectorAll('.entry-card.expanded').forEach(el => expanded.add(+el.dataset.idx));
+
+  list.innerHTML = '';
+  entries.forEach((e, i) => {
+    const card = document.createElement('div');
+    card.className = 'entry-card' + (i === selectedIndex ? ' selected' : '') + (expanded.has(i) ? ' expanded' : '');
+    card.dataset.idx = i;
+
+    card.innerHTML = `
+      <div class="entry-header" onclick="toggleCard(${i}, event)">
+        <span class="drag-handle" title="Drag to reorder">&#8942;&#8942;</span>
+        <span class="type-badge type-${e.type}">${e.type}</span>
+        <span class="entry-uid" id="uid-badge-${i}" style="${e.uid?'':'display:none'}">${e.uid||''}</span>
+        <span class="uid-warn-icon" id="uid-warn-${i}" title="${uidIssues[i]||''}" style="${uidIssues[i]?'':'display:none'}">&#9888;</span>
+        <span class="entry-preview">${getEntryPreview(e)}</span>
+        <span class="entry-index">#${i}</span>
+        <button class="btn-icon focus-graph-btn" onclick="focusAndSelectNode(${i},event)" title="Focus in graph">&#9678;</button>
+        <span class="collapse-icon">&#9660;</span>
+      </div>
+      <div class="entry-body">
+        ${buildEntryForm(e, i, uidIssues[i])}
+      </div>
+    `;
+
+    // Drag events — only the handle arms draggable to preserve text selection elsewhere
+    const handle = card.querySelector('.drag-handle');
+    handle.addEventListener('mousedown', () => { card.draggable = true; });
+    handle.addEventListener('mouseup',   () => { card.draggable = false; });
+    card.addEventListener('dragstart', e2 => { dragSrc = i; card.classList.add('dragging-source'); e2.dataTransfer.effectAllowed = 'move'; });
+    card.addEventListener('dragend', () => { card.draggable = false; card.classList.remove('dragging-source'); });
+    card.addEventListener('dragover', e2 => { e2.preventDefault(); card.classList.add('drag-over'); });
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    card.addEventListener('drop', e2 => { e2.preventDefault(); card.classList.remove('drag-over'); onDrop(i); });
+
+    list.appendChild(card);
+  });
+
+  // Attach live listeners
+  list.querySelectorAll('[data-field]').forEach(el => {
+    el.addEventListener('input', onFieldChange);
+    el.addEventListener('change', onFieldChange);
+  });
+
+  saveLocal();
+  renderGraph();
+}
+
+let dragSrc = null;
+function onDrop(target) {
+  if (dragSrc === null || dragSrc === target) return;
+  const arr = scriptData.script;
+  const [item] = arr.splice(dragSrc, 1);
+  arr.splice(target, 0, item);
+  dragSrc = null;
+  renderList();
+}
+
+// ============================================================
+//  Entry form builder
+// ============================================================
+function buildEntryForm(e, i, uidIssue) {
+  let html = `
+    <div class="field-row-inline">
+      <div class="field-row">
+        <label>Type</label>
+        <select data-field="type" data-idx="${i}">
+          ${TYPES.map(t => `<option value="${t}" ${t===e.type?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field-row" style="flex:2">
+        <label>UID (optional)</label>
+        <input type="text" id="uid-input-${i}" data-field="uid" data-idx="${i}" value="${e.uid||''}" placeholder="auto-generated" style="${uidIssue?'border-color:var(--warn)':''}">
+        <div class="field-hint field-error" id="uid-error-${i}" style="${uidIssue?'':'display:none'}">&#9888; <span>${uidIssue||''}</span></div>
+        <div class="field-hint">&#8627; internal: <span>${iuidOf(i)}</span></div>
+      </div>
+    </div>
+  `;
+
+  if (TYPE_HAS_MSG.has(e.type)) {
+    html += `<div class="field-row"><label>Message <span style="color:var(--text2);font-size:0.68rem">(supports &lt;d&gt;...&lt;/d&gt; tags)</span></label>
+      <textarea data-field="msg" data-idx="${i}">${e.msg||''}</textarea></div>`;
+  }
+
+  if (e.type === 'minigame') {
+    html += `<div class="field-row-inline">
+      <div class="field-row"><label>Game ID</label><input type="number" data-field="gameId" data-idx="${i}" value="${e.gameId||0}"></div>
+      <div class="field-row"><label>Win Bid</label><input type="number" data-field="winBid" data-idx="${i}" value="${e.winBid??1}"></div>
+      <div class="field-row"><label>Lose Bid</label><input type="number" data-field="loseBid" data-idx="${i}" value="${e.loseBid??0}"></div>
+    </div>`;
+  }
+
+  if (e.type === 'decision') {
+    html += buildOptionsEditor(e, i);
+  }
+
+  if (e.type === 'branch') {
+    html += buildBranchEditor(e, i);
+  }
+
+  if (TYPE_HAS_NEXT.has(e.type)) {
+    html += `<div class="field-row"><label>Next UID (empty = next)</label>
+      <input type="text" data-field="next" data-idx="${i}" value="${e.next||''}" placeholder="uid-of-next-entry">
+      <div class="field-hint" id="next-hint-${i}">${resolveNextHint(i)}</div>
+    </div>`;
+  }
+
+  html += `<div class="entry-actions">
+    <button class="btn btn-secondary btn-sm" onclick="duplicateEntry(${i})">Duplicate</button>
+    <button class="btn btn-secondary btn-sm" onclick="addEntryAfter(${i})">+ After</button>
+    <div style="flex:1"></div>
+    <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="deleteEntry(${i})">Delete</button>
+  </div>`;
+
+  return html;
+}
+
+function buildOptionsEditor(e, i) {
+  const opts = e.options || [];
+  let html = `<div class="field-row"><label>Options <button class="btn-icon add" onclick="addOption(${i})" title="Add option">+ Option</button></label>
+    <div class="options-list" id="opts-${i}">`;
+  opts.forEach((o, oi) => {
+    const effectiveBid = o.bid ?? oi;
+    html += `<div class="option-item">
+      <div class="option-item-header">
+        <span>Option ${oi}</span>
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <input type="number" data-field="opt-bid" data-idx="${i}" data-oi="${oi}" value="${effectiveBid}" style="width:60px" placeholder="bid">
+          <div class="field-hint">emits <span>bid:${effectiveBid}</span></div>
+        </div>
+        <div style="flex:1"></div>
+        <button class="btn-icon" onclick="deleteOption(${i},${oi})" title="Remove">&#10005;</button>
+      </div>
+      <textarea data-field="opt-msg" data-idx="${i}" data-oi="${oi}" placeholder="Message...">${o.msg||''}</textarea>
+      <div class="field-row-inline">
+        <div class="field-row"><label>Effect</label><input type="number" step="0.01" data-field="opt-effect" data-idx="${i}" data-oi="${oi}" value="${o.effect??0}"></div>
+      </div>
+    </div>`;
+  });
+  html += `</div></div>`;
+  return html;
+}
+
+function buildBranchEditor(e, i) {
+  const branches = e.branches || [];
+  const isStrArr = branches.length > 0 && typeof branches[0] === 'string';
+  let html = `<div class="field-row"><label>Branches <button class="btn-icon add" onclick="addBranch(${i})" title="Add branch">+ Branch</button></label>
+    <div class="branches-list" id="brs-${i}">`;
+  branches.forEach((b, bi) => {
+    const bid = typeof b === 'string' ? bi : (b.bid ?? bi);
+    const next = typeof b === 'string' ? b : (b.next || '');
+    html += `<div class="branch-item">
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <div style="display:flex;align-items:center;gap:4px"><label>bid</label>
+          <input type="number" data-field="br-bid" data-idx="${i}" data-bi="${bi}" value="${bid}" style="width:60px">
+        </div>
+        <div class="field-hint">consumes <span>bid:${bid}</span></div>
+      </div>
+      <label>next</label>
+      <input type="text" data-field="br-next" data-idx="${i}" data-bi="${bi}" value="${next}" placeholder="uid-of-target">
+      <button class="btn-icon" onclick="deleteBranch(${i},${bi})" title="Remove">&#10005;</button>
+    </div>`;
+  });
+  html += `</div></div>`;
+  return html;
+}
+
+// ============================================================
+//  Field change handler
+// ============================================================
+function onFieldChange(ev) {
+  const el = ev.target;
+  const field = el.dataset.field;
+  const idx = +el.dataset.idx;
+  const entry = scriptData.script[idx];
+  if (!entry) return;
+
+  if (field === 'type') {
+    const newType = el.value;
+    if (newType !== entry.type) {
+      const lostFields = getLostFields(entry, newType);
+      if (lostFields.length > 0) {
+        showModal(
+          'Change Entry Type?',
+          `Changing from <b>${entry.type}</b> to <b>${newType}</b> will discard: <span class="modal-warn">${lostFields.join(', ')}</span>. This cannot be undone.`,
+          [
+            { label: 'Cancel', cls: 'btn-secondary', fn: () => { el.value = entry.type; } },
+            { label: 'Change Type', cls: 'btn-warn', fn: () => { applyTypeChange(idx, newType); } }
+          ]
+        );
+        return;
+      }
+      applyTypeChange(idx, newType);
+    }
+    return;
+  }
+
+  if (field === 'uid')    { entry.uid = el.value.trim(); refreshUidValidation(); return; }
+  if (field === 'msg')    { entry.msg = el.value; renderGraph(); return; }
+  if (field === 'next') {
+    entry.next = el.value.trim();
+    const hint = document.getElementById(`next-hint-${idx}`);
+    if (hint) hint.innerHTML = resolveNextHint(idx);
+    renderGraph();
+    return;
+  }
+  if (field === 'gameId') { entry.gameId = +el.value; return; }
+  if (field === 'winBid') { entry.winBid = +el.value; return; }
+  if (field === 'loseBid'){ entry.loseBid = +el.value; return; }
+
+  // Option fields
+  if (field === 'opt-msg' || field === 'opt-bid' || field === 'opt-effect') {
+    const oi = +el.dataset.oi;
+    if (!entry.options[oi]) return;
+    if (field === 'opt-msg')    { entry.options[oi].msg = el.value; renderGraph(); }
+    if (field === 'opt-bid')    { entry.options[oi].bid = +el.value; renderList(); }
+    if (field === 'opt-effect') { entry.options[oi].effect = +el.value; }
+    return;
+  }
+
+  // Branch fields
+  if (field === 'br-bid' || field === 'br-next') {
+    const bi = +el.dataset.bi;
+    if (typeof entry.branches[bi] === 'string') {
+      entry.branches[bi] = { bid: bi, next: entry.branches[bi] };
+    }
+    if (!entry.branches[bi]) entry.branches[bi] = { bid: bi, next: '' };
+    if (field === 'br-bid')  { entry.branches[bi].bid = +el.value; renderList(); return; }
+    if (field === 'br-next') { entry.branches[bi].next = el.value.trim(); renderGraph(); }
+    return;
+  }
+}
+
+function getLostFields(entry, newType) {
+  const lost = [];
+  if (entry.msg && !TYPE_HAS_MSG.has(newType)) {
+    if (entry.msg.trim()) lost.push(`msg ("${entry.msg.slice(0,20)}...")`);
+  }
+  if (entry.options && entry.options.length && newType !== 'decision') lost.push('options');
+  if (entry.branches && entry.branches.length && newType !== 'branch') lost.push('branches');
+  if (entry.gameId !== undefined && newType !== 'minigame') lost.push('gameId/bids');
+  return lost;
+}
+
+function applyTypeChange(idx, newType) {
+  const entry = scriptData.script[idx];
+  const oldEntry = { uid: entry.uid, next: entry.next };
+  const fresh = defaultEntry(newType);
+  // Preserve uid and next if applicable
+  fresh.uid = oldEntry.uid;
+  if (TYPE_HAS_NEXT.has(newType) && oldEntry.next) fresh.next = oldEntry.next;
+  scriptData.script[idx] = fresh;
+  renderList();
+}
+
+// ============================================================
+//  Card toggle
+// ============================================================
+function setSelection(i) {
+  // i = null to clear
+  selectedIndex = i;
+  _highlightedNode = i;
+  document.querySelectorAll('.entry-card.selected').forEach(c => c.classList.remove('selected'));
+  if (i !== null) {
+    const card = document.querySelector(`.entry-card[data-idx="${i}"]`);
+    if (card) card.classList.add('selected');
+  }
+  renderGraph();
+}
+
+function toggleCard(i, ev) {
+  if (ev.target.closest('select,input,textarea,button')) return;
+  const card = document.querySelector(`.entry-card[data-idx="${i}"]`);
+  if (!card) return;
+  card.classList.toggle('expanded');
+  setSelection(card.classList.contains('expanded') ? i : null);
+}
+
+// ============================================================
+//  Entry CRUD
+// ============================================================
+function addEntry() { addEntryOfType('senator'); }
+
+function addEntryOfType(type) {
+  const insertAt = selectedIndex !== null ? selectedIndex + 1 : scriptData.script.length;
+  scriptData.script.splice(insertAt, 0, defaultEntry(type));
+  renderList();
+  setTimeout(() => {
+    const card = document.querySelector(`.entry-card[data-idx="${insertAt}"]`);
+    if (card) {
+      card.classList.add('expanded');
+      setSelection(insertAt);
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, 10);
+}
+
+function expandAll() {
+  document.querySelectorAll('.entry-card').forEach(c => c.classList.add('expanded'));
+}
+
+function foldAll() {
+  document.querySelectorAll('.entry-card').forEach(c => c.classList.remove('expanded'));
+  setSelection(null);
+}
+
+function addEntryAfter(i) {
+  scriptData.script.splice(i+1, 0, defaultEntry('senator'));
+  renderList();
+}
+
+function duplicateEntry(i) {
+  const copy = JSON.parse(JSON.stringify(scriptData.script[i]));
+  copy.uid = copy.uid ? copy.uid + '-copy' : '';
+  scriptData.script.splice(i+1, 0, copy);
+  renderList();
+  toast('Duplicated entry');
+}
+
+function deleteEntry(i) {
+  const e = scriptData.script[i];
+  const uid = e.uid;
+  const refs = uid ? findRefs(uid) : [];
+  const refMsg = refs.length ? `<br><span class="modal-warn">Warning: ${refs.length} other entr${refs.length===1?'y':'ies'} reference this UID.</span>` : '';
+  showModal(
+    'Delete Entry?',
+    `Delete entry #${i} (${e.type}${uid?' uid='+uid:''})? This cannot be undone.${refMsg}`,
+    [
+      { label: 'Cancel', cls: 'btn-secondary', fn: null },
+      { label: 'Delete', cls: 'btn-primary', fn: () => { scriptData.script.splice(i,1); renderList(); } }
+    ]
+  );
+}
+
+function findRefs(uid) {
+  const refs = [];
+  scriptData.script.forEach((e,i) => {
+    if (e.next === uid) refs.push(i);
+    if (e.branches) e.branches.forEach(b => { if ((typeof b==='string'?b:b.next)===uid) refs.push(i); });
+  });
+  return refs;
+}
+
+function addOption(idx) {
+  const entry = scriptData.script[idx];
+  const maxBid = entry.options.length ? Math.max(...entry.options.map(o => o.bid ?? 0)) : -1;
+  entry.options.push({ msg: '', effect: 0, bid: maxBid + 1 });
+  renderList();
+}
+
+function deleteOption(idx, oi) {
+  const entry = scriptData.script[idx];
+  if (entry.options[oi].msg.trim()) {
+    showModal('Delete Option?', `Delete option "${entry.options[oi].msg.slice(0,40)}"?`, [
+      { label: 'Cancel', cls: 'btn-secondary', fn: null },
+      { label: 'Delete', cls: 'btn-primary', fn: () => { entry.options.splice(oi,1); renderList(); } }
+    ]);
+  } else {
+    entry.options.splice(oi,1);
+    renderList();
+  }
+}
+
+function addBranch(idx) {
+  const entry = scriptData.script[idx];
+  const maxBid = entry.branches.length ? Math.max(...entry.branches.map(b => typeof b === 'string' ? 0 : (b.bid ?? 0))) : -1;
+  entry.branches.push({ bid: maxBid + 1, next: '' });
+  renderList();
+}
+
+function deleteBranch(idx, bi) {
+  const entry = scriptData.script[idx];
+  entry.branches.splice(bi,1);
+  renderList();
+}
+
+// ============================================================
+//  Import / Export
+// ============================================================
+function importScript() {
+  document.getElementById('file-input').click();
+}
+
+function handleFileImport(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  ev.target.value = '';
+  const reader = new FileReader();
+  reader.onload = e => {
+    let data;
+    try { data = JSON.parse(e.target.result); }
+    catch(err) { toast('Invalid JSON: ' + err.message, 'error'); return; }
+
+    if (!data.script || !Array.isArray(data.script)) {
+      toast('Invalid format: missing "script" array', 'error'); return;
+    }
+
+    if (scriptData.script.length > 0) {
+      showModal(
+        'Replace Current Script?',
+        `Importing will replace the current ${scriptData.script.length} entr${scriptData.script.length===1?'y':'ies'}.`,
+        [
+          { label: 'Cancel', cls: 'btn-secondary', fn: null },
+          { label: 'Replace', cls: 'btn-warn', fn: () => doImport(data) }
+        ]
+      );
+    } else {
+      doImport(data);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function doImport(data) {
+  const wasV1 = data.version === 1;
+  scriptData = { version: 2, script: data.script };
+  markClean();
+  document.getElementById('version-badge').textContent = 'v2';
+  document.getElementById('version-badge').style.color = '';
+  document.getElementById('version-badge').style.borderColor = '';
+  if (wasV1) {
+    toast('Imported v1 script as v2 — please review entries', 'warn');
+  } else {
+    toast('Imported successfully', 'success');
+  }
+  renderList();
+}
+
+function exportScript() {
+  const warnings = computeWarnings();
+  const box  = document.getElementById('export-warn-box');
+  const list = document.getElementById('export-warn-list');
+  if (warnings.length > 0) {
+    list.innerHTML = warnings.map(w => `<div>&#8227; ${escXml(w.title)}: ${escXml(w.desc)}</div>`).join('');
+    box.style.display = '';
+  } else {
+    box.style.display = 'none';
+  }
+  document.getElementById('export-dialog').classList.remove('hidden');
+  const input = document.getElementById('export-filename');
+  input.focus();
+  input.select();
+}
+
+function closeExportDialog() {
+  document.getElementById('export-dialog').classList.add('hidden');
+}
+
+function doExport() {
+  let name = document.getElementById('export-filename').value.trim() || 'script';
+  name = name.replace(/\.json$/i, '');
+  const filename = name + '.json';
+  const out = buildExportData();
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  closeExportDialog();
+  markClean();
+  toast(`Exported ${filename}`, 'success');
+}
+
+function buildExportData() {
+  const script = scriptData.script.map(e => {
+    const out = {};
+    if (e.uid) out.uid = e.uid;
+    out.type = e.type;
+    if (e.msg !== undefined && e.msg !== '') out.msg = e.msg;
+    if (e.type === 'minigame') {
+      out.gameId = e.gameId ?? 0;
+      if ((e.winBid ?? 1) !== 1) out.winBid = e.winBid;
+      if ((e.loseBid ?? 0) !== 0) out.loseBid = e.loseBid;
+    }
+    if (e.options) out.options = e.options;
+    if (e.branches) out.branches = e.branches;
+    if (e.next) out.next = e.next;
+    return out;
+  });
+  return { version: scriptData.version ?? 2, script };
+}
+
+// ============================================================
+//  Modal
+// ============================================================
+function showModal(title, body, actions) {
+  document.getElementById('modal-title').innerHTML = title;
+  document.getElementById('modal-body').innerHTML = body;
+  const actEl = document.getElementById('modal-actions');
+  actEl.innerHTML = '';
+  actions.forEach(a => {
+    const btn = document.createElement('button');
+    btn.className = 'btn ' + a.cls;
+    btn.innerHTML = a.label;
+    btn.onclick = () => { closeModal(); if (a.fn) a.fn(); };
+    actEl.appendChild(btn);
+  });
+  document.getElementById('modal').classList.remove('hidden');
+}
+function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+document.getElementById('modal').addEventListener('click', e => { if (e.target === document.getElementById('modal')) closeModal(); });
+document.getElementById('export-dialog').addEventListener('click', e => { if (e.target === document.getElementById('export-dialog')) closeExportDialog(); });
+
+// ============================================================
+//  Toast
+// ============================================================
+let _toastTimer = null;
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' '+type : '');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.className = '', 3000);
+}
+
+// ============================================================
+//  Graph Renderer (SVG)
+// ============================================================
+const NODE_W = 180, NODE_H = 72, LAYER_GAP_Y = 116, COL_GAP_X = 210;
+const WRAP_MARGIN = 48;
+let graphTransform = { x: 20, y: 20, scale: 1 };
+let graphDragging = false, graphDragStart = null;
+let _highlightedNode = null;
+let graphOptions = { direction: 'vertical', wrap: 0 };
+
+function setGraphDirection(dir) {
+  graphOptions.direction = dir;
+  document.getElementById('layout-v').classList.toggle('active', dir === 'vertical');
+  document.getElementById('layout-h').classList.toggle('active', dir === 'horizontal');
+  renderGraph();
+}
+function setGraphWrap(val) {
+  graphOptions.wrap = Math.max(0, parseInt(val) || 0);
+  renderGraph();
+}
+
+function getNodeColor(type) {
+  const map = {
+    boss:'#e74c3c', pig:'#e67e22', senator:'#9b59b6', player:'#3498db',
+    minigame:'#1abc9c', decision:'#f1c40f', branch:'#e91e63', day:'#607d8b', end:'#455a64'
+  };
+  return map[type] || '#555';
+}
+
+function getTextColor(type) { return type === 'decision' ? '#1a1a1a' : '#fff'; }
+
+// Split text into up to 2 lines of at most `w` chars, last line ends with … if truncated
+function wrapPreview(text, w) {
+  if (!text) return ['', ''];
+  if (text.length <= w) return [text, ''];
+  let cut = text.lastIndexOf(' ', w);
+  if (cut < w * 0.4) cut = w;
+  const l1 = text.slice(0, cut);
+  const rest = text.slice(cut).trimStart();
+  if (!rest) return [l1, ''];
+  if (rest.length <= w) return [l1, rest];
+  let cut2 = rest.lastIndexOf(' ', w - 1);
+  if (cut2 < (w - 1) * 0.4) cut2 = w - 1;
+  return [l1, rest.slice(0, cut2) + '…'];
+}
+
+function computeGraphLayout(entries) {
+  // Build UID -> index map
+  const uidMap = {};
+  entries.forEach((e, i) => { if (e.uid) uidMap[e.uid] = i; });
+
+  // Build adjacency — returns [{idx, label}]
+  function getSuccessors(e, i) {
+    const s = [];
+    if (e.next) { const t = uidMap[e.next]; if (t !== undefined) s.push({idx: t, label: null}); }
+    if (e.branches) e.branches.forEach(b => {
+      const uid = typeof b === 'string' ? b : b.next;
+      const bid = typeof b === 'string' ? null : (b.bid ?? null);
+      const t = uidMap[uid];
+      if (t !== undefined) s.push({idx: t, label: bid !== null ? `bid:${bid}` : null});
+    });
+    // implicit next
+    if (!e.next && e.type !== 'end' && e.type !== 'branch' && i+1 < entries.length) s.push({idx: i+1, label: null});
+    // deduplicate by idx
+    const seen = new Set();
+    return s.filter(x => { if (seen.has(x.idx)) return false; seen.add(x.idx); return true; });
+  }
+
+  // BFS layers
+  const layer = new Array(entries.length).fill(-1);
+  const queue = [0];
+  layer[0] = 0;
+  const visited = new Set([0]);
+  while (queue.length) {
+    const cur = queue.shift();
+    const succs = getSuccessors(entries[cur], cur);
+    succs.forEach(({idx: s}) => {
+      if (!visited.has(s)) {
+        visited.add(s);
+        layer[s] = layer[cur] + 1;
+        queue.push(s);
+      } else {
+        layer[s] = Math.max(layer[s], layer[cur] + 1);
+      }
+    });
+  }
+  // Assign layer 0 to disconnected
+  entries.forEach((_, i) => { if (layer[i] === -1) layer[i] = 0; });
+
+  // Assign columns within each layer
+  const layerCols = {};
+  const col = new Array(entries.length).fill(0);
+  entries.forEach((_, i) => {
+    const l = layer[i];
+    if (!(l in layerCols)) layerCols[l] = 0;
+    col[i] = layerCols[l]++;
+  });
+
+  // Compute positions using direction + wrap options
+  const { direction, wrap } = graphOptions;
+  let pos;
+
+  if (wrap > 0) {
+    // Compute max col-count per wrap group so each group knows its width/height
+    const groupMaxCols = {};
+    entries.forEach((_, i) => {
+      const g = Math.floor(layer[i] / wrap);
+      groupMaxCols[g] = Math.max(groupMaxCols[g] || 0, col[i] + 1);
+    });
+    const maxGroup = Math.max(...entries.map((_, i) => Math.floor(layer[i] / wrap)));
+
+    if (direction === 'vertical') {
+      // Groups tile left-to-right; each group is a column of `wrap` layers
+      const groupX = {};
+      let xAccum = 0;
+      for (let g = 0; g <= maxGroup; g++) {
+        groupX[g] = xAccum;
+        xAccum += (groupMaxCols[g] || 1) * COL_GAP_X + WRAP_MARGIN;
+      }
+      pos = entries.map((_, i) => ({
+        x: groupX[Math.floor(layer[i] / wrap)] + col[i] * COL_GAP_X,
+        y: (layer[i] % wrap) * LAYER_GAP_Y
+      }));
+    } else {
+      // Horizontal: groups tile top-to-bottom; each group is a row of `wrap` layers
+      const groupY = {};
+      let yAccum = 0;
+      for (let g = 0; g <= maxGroup; g++) {
+        groupY[g] = yAccum;
+        yAccum += (groupMaxCols[g] || 1) * LAYER_GAP_Y + WRAP_MARGIN;
+      }
+      pos = entries.map((_, i) => ({
+        x: (layer[i] % wrap) * COL_GAP_X,
+        y: groupY[Math.floor(layer[i] / wrap)] + col[i] * LAYER_GAP_Y
+      }));
+    }
+  } else {
+    if (direction === 'vertical') {
+      pos = entries.map((_, i) => ({ x: col[i] * COL_GAP_X, y: layer[i] * LAYER_GAP_Y }));
+    } else {
+      pos = entries.map((_, i) => ({ x: layer[i] * COL_GAP_X, y: col[i] * LAYER_GAP_Y }));
+    }
+  }
+
+  return { pos, getSuccessors, uidMap };
+}
+
+function renderGraph() {
+  const svg = document.getElementById('graph-svg');
+  const entries = scriptData.script;
+
+  if (entries.length === 0) {
+    svg.innerHTML = `<text x="50%" y="50%" fill="var(--text2)" font-size="14" text-anchor="middle" dominant-baseline="middle">No entries yet</text>`;
+    document.getElementById('graph-info').textContent = '';
+    return;
+  }
+
+  const { pos, getSuccessors } = computeGraphLayout(entries);
+
+  let edgesHTML = '';
+  let nodesHTML = '';
+
+  // Draw edges first
+  entries.forEach((e, i) => {
+    const succs = getSuccessors(e, i);
+    const sx = pos[i].x + NODE_W/2;
+    const sy = pos[i].y + NODE_H;
+    succs.forEach(({idx: t, label: edgeLabel}, si) => {
+      const tx = pos[t].x + NODE_W/2;
+      const ty = pos[t].y;
+      const midY = (sy + ty) / 2;
+      const d = `M ${sx} ${sy} C ${sx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`;
+      const isMain = si === 0 && succs.length === 1;
+      const stroke = isMain ? '#4a6fa5' : 'var(--accent)';
+      edgesHTML += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${isMain?1.5:1.2}" stroke-opacity="0.7" marker-end="url(#arrow)"/>`;
+      if (edgeLabel) {
+        const lx = (sx + tx) / 2;
+        const ly = midY;
+        edgesHTML += `<rect x="${lx-18}" y="${ly-8}" width="36" height="13" rx="3" fill="#1a1a2e" opacity="0.85"/>
+          <text x="${lx}" y="${ly+2}" fill="#f5a623" font-size="8.5" font-weight="600" text-anchor="middle" font-family="monospace">${escXml(edgeLabel)}</text>`;
+      }
+    });
+  });
+
+  // Draw nodes
+  entries.forEach((e, i) => {
+    const { x, y } = pos[i];
+    const color = getNodeColor(e.type);
+    const tc = getTextColor(e.type);
+    const idLabel = e.uid ? e.uid : iuidOf(i);
+    const rawMsg = stripTags(e.msg || '');
+    const fallback = e.type === 'decision' ? `${(e.options||[]).length} option(s)`
+                   : e.type === 'branch'   ? `${(e.branches||[]).length} branch(es)`
+                   : e.type === 'day'      ? 'End of day'
+                   : e.type === 'end'      ? 'Game over' : '';
+    const [pl1, pl2] = wrapPreview(rawMsg || fallback, 26);
+    const isSelected = _highlightedNode === i;
+    const clipId = `clip-n${i}`;
+    nodesHTML += `<g class="graph-node${isSelected?' selected-node':''}" data-ni="${i}" onclick="onNodeClick(${i})">
+      <clipPath id="${clipId}"><rect x="${x+1}" y="${y+1}" width="${NODE_W-2}" height="${NODE_H-2}"/></clipPath>
+      <rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="7" ry="7"
+        fill="${color}" stroke="${isSelected?'#fff':color}" stroke-width="${isSelected?2.5:1}" opacity="0.92"/>
+      <g clip-path="url(#${clipId})">
+        <text x="${x+7}" y="${y+13}" fill="${tc}" font-size="9" font-weight="700" opacity="0.8">${escXml(e.type)}</text>
+        <text x="${x+NODE_W-7}" y="${y+13}" fill="${tc}" font-size="8" opacity="0.5" text-anchor="end">#${i}</text>
+        <text x="${x+7}" y="${y+28}" fill="${tc}" font-size="10" font-weight="600" font-family="monospace">${escXml(idLabel.slice(0,22))}</text>
+        <text x="${x+7}" y="${y+44}" fill="${tc}" font-size="8.5" opacity="0.78">${escXml(pl1)}</text>
+        ${pl2 ? `<text x="${x+7}" y="${y+57}" fill="${tc}" font-size="8.5" opacity="0.78">${escXml(pl2)}</text>` : ''}
+      </g>
+    </g>`;
+  });
+
+  // Compute viewBox
+  const maxX = Math.max(...pos.map(p=>p.x)) + NODE_W + 30;
+  const maxY = Math.max(...pos.map(p=>p.y)) + NODE_H + 30;
+
+  svg.innerHTML = `
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="var(--text2)" opacity="0.7"/>
+      </marker>
+    </defs>
+    <g id="graph-root" transform="translate(${graphTransform.x},${graphTransform.y}) scale(${graphTransform.scale})">
+      ${edgesHTML}
+      ${nodesHTML}
+    </g>
+  `;
+
+  document.getElementById('graph-info').textContent = `${entries.length} nodes`;
+
+  // Re-attach SVG pan/zoom
+  setupGraphInteraction();
+  renderWarnings();
+}
+
+function escXml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function onNodeClick(i) {
+  const card = document.querySelector(`.entry-card[data-idx="${i}"]`);
+  if (card && !card.classList.contains('expanded')) card.classList.add('expanded');
+  setSelection(i);
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ============================================================
+//  Graph pan/zoom
+// ============================================================
+function setupGraphInteraction() {
+  const svg = document.getElementById('graph-svg');
+  svg.onmousedown = e => {
+    if (e.target.closest('.graph-node')) return;
+    graphDragging = true;
+    graphDragStart = { x: e.clientX - graphTransform.x, y: e.clientY - graphTransform.y };
+    svg.style.cursor = 'grabbing';
+  };
+  svg.onmousemove = e => {
+    if (!graphDragging) return;
+    graphTransform.x = e.clientX - graphDragStart.x;
+    graphTransform.y = e.clientY - graphDragStart.y;
+    document.getElementById('graph-root')?.setAttribute('transform',
+      `translate(${graphTransform.x},${graphTransform.y}) scale(${graphTransform.scale})`);
+  };
+  svg.onmouseup = svg.onmouseleave = () => { graphDragging = false; svg.style.cursor = 'grab'; };
+  svg.onwheel = e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.1 : 0.9;
+    graphZoom(factor, e.clientX, e.clientY);
+  };
+}
+
+function graphZoom(factor, cx, cy) {
+  const svg = document.getElementById('graph-svg');
+  const rect = svg.getBoundingClientRect();
+  const px = (cx ?? rect.width/2) - rect.left;
+  const py = (cy ?? rect.height/2) - rect.top;
+  const newScale = Math.max(0.15, Math.min(4, graphTransform.scale * factor));
+  graphTransform.x = px - (px - graphTransform.x) * (newScale / graphTransform.scale);
+  graphTransform.y = py - (py - graphTransform.y) * (newScale / graphTransform.scale);
+  graphTransform.scale = newScale;
+  document.getElementById('graph-root')?.setAttribute('transform',
+    `translate(${graphTransform.x},${graphTransform.y}) scale(${graphTransform.scale})`);
+}
+
+function graphFit() {
+  const entries = scriptData.script;
+  if (!entries.length) return;
+  const svg = document.getElementById('graph-svg');
+  const rect = svg.getBoundingClientRect();
+  const { pos } = computeGraphLayout(entries);
+  const maxX = Math.max(...pos.map(p=>p.x)) + NODE_W;
+  const maxY = Math.max(...pos.map(p=>p.y)) + NODE_H;
+  const scale = Math.min(0.95 * rect.width / maxX, 0.95 * rect.height / maxY, 2);
+  graphTransform = {
+    x: (rect.width - maxX * scale) / 2,
+    y: (rect.height - maxY * scale) / 2,
+    scale
+  };
+  renderGraph();
+}
+
+// ============================================================
+//  Resizer
+// ============================================================
+(function() {
+  const resizer = document.getElementById('resizer');
+  const left = document.getElementById('left-panel');
+  let dragging = false, startX, startW;
+  resizer.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = left.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const w = Math.max(280, Math.min(window.innerWidth*0.6, startW + e.clientX - startX));
+    left.style.width = w + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    dragging = false; resizer.classList.remove('dragging');
+    document.body.style.userSelect = '';
+  });
+})();
+
+// ============================================================
+//  Warnings
+// ============================================================
+function computeWarnings() {
+  const warnings = [];
+  const entries = scriptData.script;
+  if (!entries.length) return warnings;
+
+  // Build UID map
+  const uidMap = {};
+  entries.forEach((e, i) => { if (e.uid) uidMap[e.uid] = i; });
+
+  // Build set of indices that are pointed to by at least one other node
+  const referenced = new Set();
+  entries.forEach((e, i) => {
+    if (e.next) {
+      const t = uidMap[e.next];
+      if (t !== undefined) referenced.add(t);
+    } else if (e.type !== 'end' && e.type !== 'branch' && i + 1 < entries.length) {
+      referenced.add(i + 1);
+    }
+    if (e.branches) e.branches.forEach(b => {
+      const uid = typeof b === 'string' ? b : b.next;
+      const t = uidMap[uid];
+      if (t !== undefined) referenced.add(t);
+    });
+  });
+
+  const uidIssues = computeUidIssues(entries);
+
+  entries.forEach((e, i) => {
+    const label = `#${i} ${e.type}${e.uid ? ' ('+e.uid+')' : ' ('+iuidOf(i)+')'}`;
+
+    // UID issues
+    if (uidIssues[i]) {
+      warnings.push({ severity: 'error', title: label, desc: uidIssues[i], idx: i });
+    }
+
+    // Unreachable node
+    if (i > 0 && !referenced.has(i)) {
+      warnings.push({ severity: 'warn', title: label, desc: 'unreachable — no other node points here', idx: i });
+    }
+
+    // Unresolved next
+    if (e.next && uidMap[e.next] === undefined) {
+      warnings.push({ severity: 'error', title: label, desc: `unresolved next: "${e.next}"`, idx: i });
+    }
+
+    // Unresolved branch targets
+    if (e.branches) e.branches.forEach((b, bi) => {
+      const uid = typeof b === 'string' ? b : b.next;
+      if (uid && uidMap[uid] === undefined) {
+        warnings.push({ severity: 'error', title: label, desc: `branch ${bi}: unresolved next "${uid}"`, idx: i });
+      }
+    });
+  });
+
+  return warnings;
+}
+
+function renderWarnings() {
+  const warnings = computeWarnings();
+  const list = document.getElementById('warnings-list');
+  const btn = document.getElementById('warn-btn');
+  if (btn) btn.className = 'btn btn-secondary btn-sm' + (warnings.length > 0 ? ' has-warnings' : '');
+
+  if (!list) return;
+  if (warnings.length === 0) {
+    list.innerHTML = '<div class="warn-empty">No warnings</div>';
+    return;
+  }
+  list.innerHTML = warnings.map(w => `
+    <div class="warn-item severity-${w.severity}" onclick="onWarningClick(${w.idx})">
+      <div class="warn-title">${escXml(w.title)}</div>
+      <div class="warn-desc">${escXml(w.desc)}</div>
+    </div>
+  `).join('');
+}
+
+function focusGraphNode(i) {
+  const entries = scriptData.script;
+  if (!entries.length) return;
+  const { pos } = computeGraphLayout(entries);
+  if (!pos[i]) return;
+  const svg = document.getElementById('graph-svg');
+  const rect = svg.getBoundingClientRect();
+  const nodeX = pos[i].x + NODE_W / 2;
+  const nodeY = pos[i].y + NODE_H / 2;
+  graphTransform.x = rect.width  / 2 - nodeX * graphTransform.scale;
+  graphTransform.y = rect.height / 2 - nodeY * graphTransform.scale;
+  renderGraph();
+}
+
+function focusAndSelectNode(i, ev) {
+  ev.stopPropagation();
+  setSelection(i);
+  focusGraphNode(i);
+}
+
+function onWarningClick(idx) {
+  const card = document.querySelector(`.entry-card[data-idx="${idx}"]`);
+  if (card && !card.classList.contains('expanded')) card.classList.add('expanded');
+  setSelection(idx);
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  focusGraphNode(idx);
+}
+
+function toggleWarnings() {
+  document.getElementById('warnings-panel').classList.toggle('hidden');
+}
+
+// ============================================================
+//  LocalStorage autosave
+// ============================================================
+const LS_KEY = 'gamescript-editor-autosave';
+
+function saveLocal() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(scriptData)); } catch(_) {}
+}
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data.script || !Array.isArray(data.script)) return false;
+    scriptData = { version: 2, script: data.script };
+    document.getElementById('version-badge').textContent = 'v2';
+    return true;
+  } catch(_) { return false; }
+}
+
+// ============================================================
+//  Unsaved-changes guard
+// ============================================================
+let _savedSnapshot = JSON.stringify(scriptData.script);
+
+function markDirty() { _savedSnapshot = null; }
+function markClean() { _savedSnapshot = JSON.stringify(scriptData.script); }
+function isDirty() { return _savedSnapshot !== JSON.stringify(scriptData.script); }
+
+window.addEventListener('beforeunload', e => {
+  if (isDirty()) {
+    e.preventDefault();
+    e.returnValue = '';  // required for Chrome to show the dialog
+  }
+});
+
+// ============================================================
+//  Init
+// ============================================================
+loadLocal();
+renderList();
+setupGraphInteraction();
+</script>
+</body>
+</html>
