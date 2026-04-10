@@ -238,11 +238,8 @@
       <div id="graph-header">
         <span>Graph Preview</span>
         <div class="layout-opts">
-          <button id="layout-v" class="layout-btn active" onclick="setGraphDirection('vertical')"  title="Vertical layout">&#8597;</button>
-          <button id="layout-h" class="layout-btn"        onclick="setGraphDirection('horizontal')" title="Horizontal layout">&#8596;</button>
-          <div class="layout-sep"></div>
           <span class="layout-label">Wrap</span>
-          <input type="number" id="layout-wrap" min="0" max="99" value="0" title="Wrap every N layers (0 = off)" oninput="setGraphWrap(this.value)">
+          <input type="number" id="layout-wrap" min="0" max="99" value="6" title="Wrap every N layers (0 = off)" oninput="setGraphWrap(this.value)">
         </div>
         <div class="spacer"></div>
         <span id="graph-info" style="font-size:0.75rem;color:var(--text2)"></span>
@@ -929,14 +926,8 @@ const WRAP_MARGIN = 48;
 let graphTransform = { x: 20, y: 20, scale: 1 };
 let graphDragging = false, graphDragStart = null;
 let _highlightedNode = null;
-let graphOptions = { direction: 'vertical', wrap: 0 };
+let graphOptions = { wrap: 6 };
 
-function setGraphDirection(dir) {
-  graphOptions.direction = dir;
-  document.getElementById('layout-v').classList.toggle('active', dir === 'vertical');
-  document.getElementById('layout-h').classList.toggle('active', dir === 'horizontal');
-  renderGraph();
-}
 function setGraphWrap(val) {
   graphOptions.wrap = Math.max(0, parseInt(val) || 0);
   renderGraph();
@@ -1019,12 +1010,12 @@ function computeGraphLayout(entries) {
     col[i] = layerCols[l]++;
   });
 
-  // Compute positions using direction + wrap options
-  const { direction, wrap } = graphOptions;
+  // Compute positions (vertical layout only)
+  const { wrap } = graphOptions;
   let pos;
 
   if (wrap > 0) {
-    // Compute max col-count per wrap group so each group knows its width/height
+    // Compute max col-count per wrap group so each group knows its width
     const groupMaxCols = {};
     entries.forEach((_, i) => {
       const g = Math.floor(layer[i] / wrap);
@@ -1032,40 +1023,22 @@ function computeGraphLayout(entries) {
     });
     const maxGroup = Math.max(...entries.map((_, i) => Math.floor(layer[i] / wrap)));
 
-    if (direction === 'vertical') {
-      // Groups tile left-to-right; each group is a column of `wrap` layers
-      const groupX = {};
-      let xAccum = 0;
-      for (let g = 0; g <= maxGroup; g++) {
-        groupX[g] = xAccum;
-        xAccum += (groupMaxCols[g] || 1) * COL_GAP_X + WRAP_MARGIN;
-      }
-      pos = entries.map((_, i) => ({
-        x: groupX[Math.floor(layer[i] / wrap)] + col[i] * COL_GAP_X,
-        y: (layer[i] % wrap) * LAYER_GAP_Y
-      }));
-    } else {
-      // Horizontal: groups tile top-to-bottom; each group is a row of `wrap` layers
-      const groupY = {};
-      let yAccum = 0;
-      for (let g = 0; g <= maxGroup; g++) {
-        groupY[g] = yAccum;
-        yAccum += (groupMaxCols[g] || 1) * LAYER_GAP_Y + WRAP_MARGIN;
-      }
-      pos = entries.map((_, i) => ({
-        x: (layer[i] % wrap) * COL_GAP_X,
-        y: groupY[Math.floor(layer[i] / wrap)] + col[i] * LAYER_GAP_Y
-      }));
+    // Groups tile left-to-right; each group is a column of `wrap` layers
+    const groupX = {};
+    let xAccum = 0;
+    for (let g = 0; g <= maxGroup; g++) {
+      groupX[g] = xAccum;
+      xAccum += (groupMaxCols[g] || 1) * COL_GAP_X + WRAP_MARGIN;
     }
+    pos = entries.map((_, i) => ({
+      x: groupX[Math.floor(layer[i] / wrap)] + col[i] * COL_GAP_X,
+      y: (layer[i] % wrap) * LAYER_GAP_Y
+    }));
   } else {
-    if (direction === 'vertical') {
-      pos = entries.map((_, i) => ({ x: col[i] * COL_GAP_X, y: layer[i] * LAYER_GAP_Y }));
-    } else {
-      pos = entries.map((_, i) => ({ x: layer[i] * COL_GAP_X, y: col[i] * LAYER_GAP_Y }));
-    }
+    pos = entries.map((_, i) => ({ x: col[i] * COL_GAP_X, y: layer[i] * LAYER_GAP_Y }));
   }
 
-  return { pos, getSuccessors, uidMap };
+  return { pos, layer, getSuccessors, uidMap };
 }
 
 function renderGraph() {
@@ -1078,7 +1051,8 @@ function renderGraph() {
     return;
   }
 
-  const { pos, getSuccessors } = computeGraphLayout(entries);
+  const { pos, layer, getSuccessors } = computeGraphLayout(entries);
+  const { wrap } = graphOptions;
 
   let edgesHTML = '';
   let nodesHTML = '';
@@ -1086,19 +1060,37 @@ function renderGraph() {
   // Draw edges first
   entries.forEach((e, i) => {
     const succs = getSuccessors(e, i);
-    const sx = pos[i].x + NODE_W/2;
-    const sy = pos[i].y + NODE_H;
     succs.forEach(({idx: t, label: edgeLabel}, si) => {
-      const tx = pos[t].x + NODE_W/2;
-      const ty = pos[t].y;
-      const midY = (sy + ty) / 2;
-      const d = `M ${sx} ${sy} C ${sx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`;
+      const srcGroup = wrap > 0 ? Math.floor(layer[i] / wrap) : 0;
+      const tgtGroup = wrap > 0 ? Math.floor(layer[t] / wrap) : 0;
+      const isWrapEdge = srcGroup !== tgtGroup;
+
+      let d, lx, ly;
+      if (isWrapEdge) {
+        // Exit right side of source node, enter left side of target node
+        const sx = pos[i].x + NODE_W;
+        const sy = pos[i].y + NODE_H / 2;
+        const tx = pos[t].x;
+        const ty = pos[t].y + NODE_H / 2;
+        const cp = Math.max(40, Math.abs(tx - sx) * 0.35);
+        d = `M ${sx} ${sy} C ${sx+cp} ${sy}, ${tx-cp} ${ty}, ${tx} ${ty}`;
+        lx = (sx + tx) / 2;
+        ly = (sy + ty) / 2;
+      } else {
+        // Normal edge: straight line from bottom-center to top-center
+        const sx = pos[i].x + NODE_W / 2;
+        const sy = pos[i].y + NODE_H;
+        const tx = pos[t].x + NODE_W / 2;
+        const ty = pos[t].y;
+        d = `M ${sx} ${sy} L ${tx} ${ty}`;
+        lx = (sx + tx) / 2;
+        ly = (sy + ty) / 2;
+      }
+
       const isMain = si === 0 && succs.length === 1;
       const stroke = isMain ? '#4a6fa5' : 'var(--accent)';
       edgesHTML += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${isMain?1.5:1.2}" stroke-opacity="0.7" marker-end="url(#arrow)"/>`;
       if (edgeLabel) {
-        const lx = (sx + tx) / 2;
-        const ly = midY;
         edgesHTML += `<rect x="${lx-18}" y="${ly-8}" width="36" height="13" rx="3" fill="#1a1a2e" opacity="0.85"/>
           <text x="${lx}" y="${ly+2}" fill="#f5a623" font-size="8.5" font-weight="600" text-anchor="middle" font-family="monospace">${escXml(edgeLabel)}</text>`;
       }
