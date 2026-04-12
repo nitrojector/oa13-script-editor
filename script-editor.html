@@ -490,10 +490,11 @@ function buildEntryForm(e, i, uidIssue) {
   }
 
   if (e.type === 'minigame') {
+    const noBidNote = e['no-bid'] ? `<br/><span style="color:var(--warn);font-size:0.68rem">&#9888; ignored</span>` : '';
     html += `<div class="field-row-inline">
       <div class="field-row"><label>Game ID</label><input type="number" data-field="gameId" data-idx="${i}" value="${e.gameId||0}"></div>
-      <div class="field-row"><label>Win Bid</label><input type="number" data-field="winBid" data-idx="${i}" value="${e.winBid??1}"></div>
-      <div class="field-row"><label>Lose Bid</label><input type="number" data-field="loseBid" data-idx="${i}" value="${e.loseBid??0}"></div>
+      <div class="field-row"><label>Win Bid${noBidNote}</label><input type="number" data-field="winBid" data-idx="${i}" value="${e.winBid??1}"></div>
+      <div class="field-row"><label>Lose Bid${noBidNote}</label><input type="number" data-field="loseBid" data-idx="${i}" value="${e.loseBid??0}"></div>
     </div>
     <div class="field-row-inline">
       <div class="field-row" style="flex-direction:row;align-items:center;gap:6px">
@@ -625,7 +626,7 @@ function onFieldChange(ev) {
   if (field === 'winBid') { entry.winBid = +el.value; return; }
   if (field === 'loseBid'){ entry.loseBid = +el.value; return; }
   if (field === 'direct') { entry.direct = el.checked; renderList(); return; }
-  if (field === 'no-bid') { entry['no-bid'] = el.checked; return; }
+  if (field === 'no-bid') { entry['no-bid'] = el.checked; renderList(); return; }
 
   // Option fields
   if (field === 'opt-msg' || field === 'opt-bid' || field === 'opt-effect') {
