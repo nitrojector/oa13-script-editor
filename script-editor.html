@@ -498,11 +498,11 @@ function buildEntryForm(e, i, uidIssue) {
     <div class="field-row-inline">
       <div class="field-row" style="flex-direction:row;align-items:center;gap:6px">
         <input type="checkbox" data-field="direct" data-idx="${i}" id="direct-${i}" ${e.direct?'checked':''} style="width:auto;margin:0">
-        <label for="direct-${i}" style="margin:0;cursor:pointer">Direct mode <span style="color:var(--text2);font-size:0.68rem">(launches immediately, no message)</span></label>
+        <label for="direct-${i}" style="margin:0;cursor:pointer">Direct mode <span style="color:var(--text2);font-size:0.68rem">(immediate launch, no msg)</span></label>
       </div>
       <div class="field-row" style="flex-direction:row;align-items:center;gap:6px">
         <input type="checkbox" data-field="no-bid" data-idx="${i}" id="nobid-${i}" ${e['no-bid']?'checked':''} style="width:auto;margin:0">
-        <label for="nobid-${i}" style="margin:0;cursor:pointer">No-bid <span style="color:var(--text2);font-size:0.68rem">(don't emit bid on game end)</span></label>
+        <label for="nobid-${i}" style="margin:0;cursor:pointer">No-bid <span style="color:var(--text2);font-size:0.68rem">(don't emit bid on minigame end)</span></label>
       </div>
     </div>`;
   }
@@ -841,7 +841,7 @@ function doImport(data) {
   if (wasV1) {
     toast('Imported v1 script as v3 — please review entries', 'warn');
   } else if (wasV2) {
-    toast('Imported v2 script as v3 — please review entries', 'warn');
+    toast('Imported v2 script, auto-upgraded to v3', 'success');
   } else {
     toast('Imported successfully', 'success');
   }
