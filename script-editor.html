@@ -200,7 +200,7 @@
 <!-- Toolbar -->
 <div id="toolbar">
   <h1>&#9654; GameScript Editor</h1>
-  <span id="version-badge">v3</span>
+  <span id="version-badge">v?</span>
   <div class="spacer"></div>
   <button class="btn btn-secondary" onclick="importScript()">&#8593; Import</button>
   <button class="btn btn-success" onclick="exportScript()">&#8595; Export</button>
@@ -303,9 +303,14 @@
 
 <script>
 // ============================================================
+//  Editor version
+// ============================================================
+const EDITOR_VERSION = 3;
+
+// ============================================================
 //  State
 // ============================================================
-let scriptData = { version: 3, script: [] };
+let scriptData = { version: EDITOR_VERSION, script: [] };
 let selectedIndex = null;
 let _uidCounter = 0;
 
@@ -834,9 +839,9 @@ function handleFileImport(ev) {
 function doImport(data) {
   const wasV1 = data.version === 1;
   const wasV2 = data.version === 2;
-  scriptData = { version: 3, script: data.script };
+  scriptData = { version: EDITOR_VERSION, script: data.script };
   markClean();
-  document.getElementById('version-badge').textContent = 'v3';
+  document.getElementById('version-badge').textContent = 'v' + EDITOR_VERSION;
   document.getElementById('version-badge').style.color = '';
   document.getElementById('version-badge').style.borderColor = '';
   if (wasV1) {
@@ -903,7 +908,7 @@ function buildExportData() {
     if (e.next) out.next = e.next;
     return out;
   });
-  return { version: scriptData.version ?? 2, script };
+  return { version: scriptData.version ?? EDITOR_VERSION, script };
 }
 
 // ============================================================
@@ -1389,8 +1394,8 @@ function loadLocal() {
     if (!raw) return false;
     const data = JSON.parse(raw);
     if (!data.script || !Array.isArray(data.script)) return false;
-    scriptData = { version: 2, script: data.script };
-    document.getElementById('version-badge').textContent = 'v2';
+    scriptData = { version: EDITOR_VERSION, script: data.script };
+    document.getElementById('version-badge').textContent = 'v' + EDITOR_VERSION;
     return true;
   } catch(_) { return false; }
 }
@@ -1414,6 +1419,7 @@ window.addEventListener('beforeunload', e => {
 // ============================================================
 //  Init
 // ============================================================
+document.getElementById('version-badge').textContent = 'v' + EDITOR_VERSION;
 loadLocal();
 renderList();
 setupGraphInteraction();
