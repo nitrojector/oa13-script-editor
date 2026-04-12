@@ -200,7 +200,7 @@
 <!-- Toolbar -->
 <div id="toolbar">
   <h1>&#9654; GameScript Editor</h1>
-  <span id="version-badge">v2</span>
+  <span id="version-badge">v3</span>
   <div class="spacer"></div>
   <button class="btn btn-secondary" onclick="importScript()">&#8593; Import</button>
   <button class="btn btn-success" onclick="exportScript()">&#8595; Export</button>
@@ -305,7 +305,7 @@
 // ============================================================
 //  State
 // ============================================================
-let scriptData = { version: 2, script: [] };
+let scriptData = { version: 3, script: [] };
 let selectedIndex = null;
 let _uidCounter = 0;
 
@@ -340,7 +340,7 @@ function defaultEntry(type) {
   const base = { uid: '', type };
   if (TYPE_HAS_MSG.has(type)) base.msg = '';
   if (TYPE_HAS_NEXT.has(type)) base.next = '';
-  if (type === 'minigame') { base.gameId = 0; base.winBid = 1; base.loseBid = 0; }
+  if (type === 'minigame') { base.gameId = 0; base.winBid = 1; base.loseBid = 0; base.direct = false; base['no-bid'] = false; }
   if (type === 'decision') { base.options = [{ msg: '', effect: 0, bid: 0 }]; }
   if (type === 'branch') { base.branches = [{ bid: 0, next: '' }, { bid: 1, next: '' }]; }
   return base;
@@ -482,7 +482,10 @@ function buildEntryForm(e, i, uidIssue) {
   `;
 
   if (TYPE_HAS_MSG.has(e.type)) {
-    html += `<div class="field-row"><label>Message <span style="color:var(--text2);font-size:0.68rem">(supports &lt;d&gt;...&lt;/d&gt; tags)</span></label>
+    const msgNote = e.type === 'minigame' && e.direct
+      ? `<span style="color:var(--warn);font-size:0.68rem">&#9888; ignored in direct mode</span>`
+      : `<span style="color:var(--text2);font-size:0.68rem">(supports &lt;d&gt;...&lt;/d&gt; tags)</span>`;
+    html += `<div class="field-row"><label>Message ${msgNote}</label>
       <textarea data-field="msg" data-idx="${i}">${e.msg||''}</textarea></div>`;
   }
 
@@ -491,6 +494,16 @@ function buildEntryForm(e, i, uidIssue) {
       <div class="field-row"><label>Game ID</label><input type="number" data-field="gameId" data-idx="${i}" value="${e.gameId||0}"></div>
       <div class="field-row"><label>Win Bid</label><input type="number" data-field="winBid" data-idx="${i}" value="${e.winBid??1}"></div>
       <div class="field-row"><label>Lose Bid</label><input type="number" data-field="loseBid" data-idx="${i}" value="${e.loseBid??0}"></div>
+    </div>
+    <div class="field-row-inline">
+      <div class="field-row" style="flex-direction:row;align-items:center;gap:6px">
+        <input type="checkbox" data-field="direct" data-idx="${i}" id="direct-${i}" ${e.direct?'checked':''} style="width:auto;margin:0">
+        <label for="direct-${i}" style="margin:0;cursor:pointer">Direct mode <span style="color:var(--text2);font-size:0.68rem">(launches immediately, no message)</span></label>
+      </div>
+      <div class="field-row" style="flex-direction:row;align-items:center;gap:6px">
+        <input type="checkbox" data-field="no-bid" data-idx="${i}" id="nobid-${i}" ${e['no-bid']?'checked':''} style="width:auto;margin:0">
+        <label for="nobid-${i}" style="margin:0;cursor:pointer">No-bid <span style="color:var(--text2);font-size:0.68rem">(don't emit bid on game end)</span></label>
+      </div>
     </div>`;
   }
 
@@ -611,6 +624,8 @@ function onFieldChange(ev) {
   if (field === 'gameId') { entry.gameId = +el.value; return; }
   if (field === 'winBid') { entry.winBid = +el.value; return; }
   if (field === 'loseBid'){ entry.loseBid = +el.value; return; }
+  if (field === 'direct') { entry.direct = el.checked; renderList(); return; }
+  if (field === 'no-bid') { entry['no-bid'] = el.checked; return; }
 
   // Option fields
   if (field === 'opt-msg' || field === 'opt-bid' || field === 'opt-effect') {
@@ -817,13 +832,16 @@ function handleFileImport(ev) {
 
 function doImport(data) {
   const wasV1 = data.version === 1;
-  scriptData = { version: 2, script: data.script };
+  const wasV2 = data.version === 2;
+  scriptData = { version: 3, script: data.script };
   markClean();
-  document.getElementById('version-badge').textContent = 'v2';
+  document.getElementById('version-badge').textContent = 'v3';
   document.getElementById('version-badge').style.color = '';
   document.getElementById('version-badge').style.borderColor = '';
   if (wasV1) {
-    toast('Imported v1 script as v2 — please review entries', 'warn');
+    toast('Imported v1 script as v3 — please review entries', 'warn');
+  } else if (wasV2) {
+    toast('Imported v2 script as v3 — please review entries', 'warn');
   } else {
     toast('Imported successfully', 'success');
   }
@@ -876,6 +894,8 @@ function buildExportData() {
       out.gameId = e.gameId ?? 0;
       if ((e.winBid ?? 1) !== 1) out.winBid = e.winBid;
       if ((e.loseBid ?? 0) !== 0) out.loseBid = e.loseBid;
+      if (e.direct) out.direct = true;
+      if (e['no-bid']) out['no-bid'] = true;
     }
     if (e.options) out.options = e.options;
     if (e.branches) out.branches = e.branches;
@@ -1107,8 +1127,9 @@ function renderGraph() {
     const fallback = e.type === 'decision' ? `${(e.options||[]).length} option(s)`
                    : e.type === 'branch'   ? `${(e.branches||[]).length} branch(es)`
                    : e.type === 'day'      ? 'End of day'
-                   : e.type === 'end'      ? 'Game over' : '';
-    const [pl1, pl2] = wrapPreview(rawMsg || fallback, 26);
+                   : e.type === 'end'      ? 'Game over'
+                   : (e.type === 'minigame' && e.direct) ? '\u26A1 Direct mode' : '';
+    const [pl1, pl2] = wrapPreview((e.type === 'minigame' && e.direct) ? fallback : (rawMsg || fallback), 26);
     const isSelected = _highlightedNode === i;
     const clipId = `clip-n${i}`;
     nodesHTML += `<g class="graph-node${isSelected?' selected-node':''}" data-ni="${i}" onclick="onNodeClick(${i})">
@@ -1277,6 +1298,11 @@ function computeWarnings() {
     // Unreachable node
     if (i > 0 && !referenced.has(i)) {
       warnings.push({ severity: 'warn', title: label, desc: 'unreachable — no other node points here', idx: i });
+    }
+
+    // Direct mode with message
+    if (e.type === 'minigame' && e.direct && e.msg && e.msg.trim()) {
+      warnings.push({ severity: 'warn', title: label, desc: 'direct mode ignores message text — remove msg or disable direct mode', idx: i });
     }
 
     // Unresolved next
