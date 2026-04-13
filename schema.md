@@ -1,6 +1,6 @@
-<a align="center" href="https://www.notion.so/Schema-32f26c5e63ba808bb924fc45e3718274?pvs=21">Notion Page</a>
+<a align="center" href="https://www.notion.so/Script-Schema-32f26c5e63ba8068b513e8403bff413c">Notion Page</a>
 
-## File Structure
+# File Structure
 
 ```json
 /*
@@ -17,7 +17,7 @@
 }
 ```
 
-## Script Entry
+# Script Entry
 
 <aside>
 <img src="/icons/alert_green.svg" alt="/icons/alert_green.svg" width="40px" />
@@ -53,9 +53,9 @@ day
 end
 ```
 
-### Entry Types
+## Entry Types
 
-#### **Boss / Pig / Senator / Player**
+### **Boss / Pig / Senator / Player**
 
 Represents a single message sent by the the Boss / Pig / Senator / Player.
 
@@ -77,7 +77,7 @@ senator
 player
 ```
 
-#### **Minigame**
+### **Minigame**
 
 Represents a message that is linked to open a minigame (`gameId`)
 
@@ -101,7 +101,7 @@ Represents a message that is linked to open a minigame (`gameId`)
     - In direct mode, the minigame is launched immediately without sending a message and waiting for user interaction.
 - `no-bid`: if true, launches the mini-game but will not emit a bid on game end
 
-#### **Decision**
+### **Decision**
 
 Represents a response decision that is presented to the player.
 
@@ -123,7 +123,7 @@ Messages in Decision(s) are implicitly specified to be sent by the Player.
 }
 ```
 
-#### **Branch**
+### **Branch**
 
 Represents a branching event.
 
@@ -159,7 +159,7 @@ Represents a branching event.
 
 but not a mix of both.
 
-#### **Day**
+### **Day**
 
 Represents the end of a day.
 
@@ -171,7 +171,7 @@ Represents the end of a day.
 }
 ```
 
-#### **End**
+### **End**
 
 Represents the end of the game.
 
@@ -184,7 +184,7 @@ Represents the end of the game.
 
 # Data Specs
 
-## Message Strings `msg`
+# Message Strings `msg`
 
 Messages are presented/saved as regular strings, with one quirk: strings can embed tags for specific behaviors; the tags are as follows:
 
@@ -198,11 +198,11 @@ Example excerpt from Day 3 in the script
  "msg": "<d>Oh now this sounds interesting!</d> I can definitely help you with that! What’s the document and what do you want me to change?"
 ```
 
-## Reserved UIDs
+# Reserved UIDs
 
 UIDs starting with `iuid-` are reserved for internal use, and should not be used in the script as `uid` values.
 
-## Branch ID `bid`
+# Branch ID `bid`
 
 Branch IDs allow for deferred branching. For example, you can have a `decision` entry with options that have `bid`, and then later in the script have a `branch` entry that specify the next entry for each `bid`. This allows you to separate the content of the options and the structure of the branches.
 
@@ -224,7 +224,7 @@ An example legal usage (with legal omission) of emitters/branches/bids is as fol
 { "uid": "after-decision", "type": "senator", "msg": "Now, let's continue..." }
 ```
 
-## Omissions
+# Omissions
 
 All [Script Entry](https://www.notion.so/Script-Schema-32f26c5e63ba8068b513e8403bff413c?pvs=21) types can omit the `next` field (if one exists), in which case `next` will be inferred to be the entry after it. Behaviorally, the game will automatically jump to the next entry in the script.
 
