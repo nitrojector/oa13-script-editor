@@ -83,6 +83,7 @@
   .type-branch  { background: var(--type-branch); }
   .type-day     { background: var(--type-day); }
   .type-end     { background: var(--type-end); }
+  .type-link    { background: #2196f3; }
 
   .entry-uid { font-size: 0.72rem; color: var(--text2); font-family: monospace; }
   .entry-preview { flex: 1; font-size: 0.78rem; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -285,6 +286,7 @@
         <button class="btn-type type-branch"   onclick="addEntryOfType('branch')"   style="background:var(--type-branch)">branch</button>
         <button class="btn-type type-day"      onclick="addEntryOfType('day')"      style="background:var(--type-day)">day</button>
         <button class="btn-type type-end"      onclick="addEntryOfType('end')"      style="background:var(--type-end)">end</button>
+        <button class="btn-type type-link"     onclick="addEntryOfType('link')"     style="background:#2196f3">link</button>
       </div>
     </div>
     <div id="entry-list"></div>
@@ -373,7 +375,7 @@
 // ============================================================
 //  Editor version
 // ============================================================
-const EDITOR_VERSION = 3;
+const EDITOR_VERSION = 4;
 
 // ============================================================
 //  State
@@ -404,7 +406,7 @@ function resolveNextHint(idx) {
 // ============================================================
 //  Type definitions
 // ============================================================
-const TYPES = ['boss','pig','senator','player','minigame','decision','branch','day','end'];
+const TYPES = ['boss','pig','senator','player','minigame','decision','branch','day','end','link'];
 const TYPE_HAS_MSG   = new Set(['boss','pig','senator','player','minigame']);
 const TYPE_HAS_NEXT  = new Set(['boss','pig','senator','player','minigame','decision','day']);
 const TYPE_KEEPS_UID = true;
@@ -413,9 +415,10 @@ function defaultEntry(type) {
   const base = { uid: '', type };
   if (TYPE_HAS_MSG.has(type)) base.msg = '';
   if (TYPE_HAS_NEXT.has(type)) base.next = '';
-  if (type === 'minigame') { base.gameId = 0; base.winBid = 1; base.loseBid = 0; base.direct = false; base['no-bid'] = false; }
+  if (type === 'minigame') { base.gameId = 0; base.winBid = 1; base.loseBid = 0; base.winEffect = 0; base.loseEffect = 0; base.direct = false; base['no-bid'] = false; }
   if (type === 'decision') { base.options = [{ msg: '', effect: 0, bid: 0 }]; }
   if (type === 'branch') { base.branches = [{ bid: 0, next: '' }, { bid: 1, next: '' }]; }
+  if (type === 'link') { base.target = ''; }
   return base;
 }
 
@@ -425,6 +428,7 @@ function getEntryPreview(e) {
   if (e.type === 'branch')   return `${(e.branches||[]).length} branch(es)`;
   if (e.type === 'day')      return 'End of day';
   if (e.type === 'end')      return 'Game over';
+  if (e.type === 'link')     return e.target ? `→ ${e.target}.json` : '→ (no target)';
   return '';
 }
 
@@ -563,11 +567,16 @@ function buildEntryForm(e, i, uidIssue) {
   }
 
   if (e.type === 'minigame') {
-    const noBidNote = e['no-bid'] ? `<br/><span style="color:var(--warn);font-size:0.68rem">&#9888; ignored</span>` : '';
+    const noBidNote = e['no-bid'] ? ` <span style="color:var(--warn);font-size:0.68rem">&#9888; ignored (no-bid)</span>` : '';
     html += `<div class="field-row-inline">
       <div class="field-row"><label>Game ID</label><input type="number" data-field="gameId" data-idx="${i}" value="${e.gameId||0}"></div>
       <div class="field-row"><label>Win Bid${noBidNote}</label><input type="number" data-field="winBid" data-idx="${i}" value="${e.winBid??1}"></div>
       <div class="field-row"><label>Lose Bid${noBidNote}</label><input type="number" data-field="loseBid" data-idx="${i}" value="${e.loseBid??0}"></div>
+    </div>
+    <div class="field-row-inline">
+      <div style="flex:1"></div>
+      <div class="field-row"><label>Win Effect</label><input type="number" step="0.01" data-field="winEffect" data-idx="${i}" value="${e.winEffect??0}"></div>
+      <div class="field-row"><label>Lose Effect</label><input type="number" step="0.01" data-field="loseEffect" data-idx="${i}" value="${e.loseEffect??0}"></div>
     </div>
     <div class="field-row-inline">
       <div class="field-row" style="flex-direction:row;align-items:center;gap:6px">
@@ -578,6 +587,17 @@ function buildEntryForm(e, i, uidIssue) {
         <input type="checkbox" data-field="no-bid" data-idx="${i}" id="nobid-${i}" ${e['no-bid']?'checked':''} style="width:auto;margin:0">
         <label for="nobid-${i}" style="margin:0;cursor:pointer">No-bid <span style="color:var(--text2);font-size:0.68rem">(don't emit bid on minigame end)</span></label>
       </div>
+    </div>`;
+  }
+
+  if (e.type === 'link') {
+    const hasJsonExt = /\.json$/i.test(e.target || '');
+    const targetNote = hasJsonExt
+      ? ` <span style="color:var(--warn);font-size:0.68rem">&#9888; remove .json — target is a stem</span>`
+      : `<span style="color:var(--text2);font-size:0.68rem"> (.json will be appended automatically)</span>`;
+    html += `<div class="field-row"><label>Target${targetNote}</label>
+      <input type="text" data-field="target" data-idx="${i}" value="${e.target||''}" placeholder="nextScript">
+      <div class="field-hint">&#8627; links to <span>${e.target ? e.target.replace(/\.json$/i,'') + '.json' : '(no target)'}</span></div>
     </div>`;
   }
 
@@ -695,11 +715,14 @@ function onFieldChange(ev) {
     renderGraph();
     return;
   }
-  if (field === 'gameId') { entry.gameId = +el.value; return; }
-  if (field === 'winBid') { entry.winBid = +el.value; return; }
-  if (field === 'loseBid'){ entry.loseBid = +el.value; return; }
-  if (field === 'direct') { entry.direct = el.checked; renderList(); return; }
-  if (field === 'no-bid') { entry['no-bid'] = el.checked; renderList(); return; }
+  if (field === 'gameId')     { entry.gameId = +el.value; return; }
+  if (field === 'winBid')     { entry.winBid = +el.value; return; }
+  if (field === 'loseBid')    { entry.loseBid = +el.value; return; }
+  if (field === 'winEffect')  { entry.winEffect = +el.value; return; }
+  if (field === 'loseEffect') { entry.loseEffect = +el.value; return; }
+  if (field === 'direct')     { entry.direct = el.checked; renderList(); return; }
+  if (field === 'no-bid')     { entry['no-bid'] = el.checked; renderList(); return; }
+  if (field === 'target')     { entry.target = el.value.trim(); renderGraph(); return; }
 
   // Option fields
   if (field === 'opt-msg' || field === 'opt-bid' || field === 'opt-effect') {
@@ -731,7 +754,8 @@ function getLostFields(entry, newType) {
   }
   if (entry.options && entry.options.length && newType !== 'decision') lost.push('options');
   if (entry.branches && entry.branches.length && newType !== 'branch') lost.push('branches');
-  if (entry.gameId !== undefined && newType !== 'minigame') lost.push('gameId/bids');
+  if (entry.gameId !== undefined && newType !== 'minigame') lost.push('gameId/bids/effects');
+  if (entry.target !== undefined && entry.target !== '' && newType !== 'link') lost.push('target');
   return lost;
 }
 
@@ -907,15 +931,18 @@ function handleFileImport(ev) {
 function doImport(data) {
   const wasV1 = data.version === 1;
   const wasV2 = data.version === 2;
+  const wasV3 = data.version === 3;
   scriptData = { version: EDITOR_VERSION, script: data.script };
   markClean();
   document.getElementById('version-badge').textContent = 'v' + EDITOR_VERSION;
   document.getElementById('version-badge').style.color = '';
   document.getElementById('version-badge').style.borderColor = '';
   if (wasV1) {
-    toast('Imported v1 script as v3 — please review entries', 'warn');
+    toast('Imported v1 script as v4 — please review entries', 'warn');
   } else if (wasV2) {
-    toast('Imported v2 script, auto-upgraded to v3', 'success');
+    toast('Imported v2 script, auto-upgraded to v4', 'success');
+  } else if (wasV3) {
+    toast('Imported v3 script, auto-upgraded to v4', 'success');
   } else {
     toast('Imported successfully', 'success');
   }
@@ -968,11 +995,14 @@ function buildExportData() {
       out.gameId = e.gameId ?? 0;
       if ((e.winBid ?? 1) !== 1) out.winBid = e.winBid;
       if ((e.loseBid ?? 0) !== 0) out.loseBid = e.loseBid;
+      if ((e.winEffect ?? 0) !== 0) out.winEffect = e.winEffect;
+      if ((e.loseEffect ?? 0) !== 0) out.loseEffect = e.loseEffect;
       if (e.direct) out.direct = true;
       if (e['no-bid']) out['no-bid'] = true;
     }
     if (e.options) out.options = e.options;
     if (e.branches) out.branches = e.branches;
+    if (e.type === 'link') out.target = (e.target || '').replace(/\.json$/i, '');
     if (e.next) out.next = e.next;
     return out;
   });
@@ -1069,7 +1099,7 @@ function setGraphWrap(val) {
 function getNodeColor(type) {
   const map = {
     boss:'#e74c3c', pig:'#e67e22', senator:'#9b59b6', player:'#3498db',
-    minigame:'#1abc9c', decision:'#f1c40f', branch:'#e91e63', day:'#607d8b', end:'#455a64'
+    minigame:'#1abc9c', decision:'#f1c40f', branch:'#e91e63', day:'#607d8b', end:'#455a64', link:'#2196f3'
   };
   return map[type] || '#555';
 }
@@ -1107,7 +1137,7 @@ function computeGraphLayout(entries) {
       if (t !== undefined) s.push({idx: t, label: bid !== null ? `bid:${bid}` : null});
     });
     // implicit next
-    if (!e.next && e.type !== 'end' && e.type !== 'branch' && i+1 < entries.length) s.push({idx: i+1, label: null});
+    if (!e.next && e.type !== 'end' && e.type !== 'branch' && e.type !== 'link' && i+1 < entries.length) s.push({idx: i+1, label: null});
     // deduplicate by idx
     const seen = new Set();
     return s.filter(x => { if (seen.has(x.idx)) return false; seen.add(x.idx); return true; });
@@ -1241,8 +1271,9 @@ function renderGraph() {
                    : e.type === 'branch'   ? `${(e.branches||[]).length} branch(es)`
                    : e.type === 'day'      ? 'End of day'
                    : e.type === 'end'      ? 'Game over'
-                   : (e.type === 'minigame' && e.direct) ? '\u26A1 Direct mode' : '';
-    const [pl1, pl2] = wrapPreview((e.type === 'minigame' && e.direct) ? fallback : (rawMsg || fallback), 26);
+                   : (e.type === 'minigame' && e.direct) ? '\u26A1 Direct mode'
+                   : e.type === 'link' ? `\u2192 ${e.target || '(no target)'}` : '';
+    const [pl1, pl2] = wrapPreview((e.type === 'minigame' && e.direct) || e.type === 'link' ? fallback : (rawMsg || fallback), 26);
     const isSelected = _highlightedNode === i;
     const clipId = `clip-n${i}`;
     nodesHTML += `<g class="graph-node${isSelected?' selected-node':''}" data-ni="${i}" onclick="onNodeClick(${i})">
@@ -1388,7 +1419,7 @@ function computeWarnings() {
     if (e.next) {
       const t = uidMap[e.next];
       if (t !== undefined) referenced.add(t);
-    } else if (e.type !== 'end' && e.type !== 'branch' && i + 1 < entries.length) {
+    } else if (e.type !== 'end' && e.type !== 'branch' && e.type !== 'link' && i + 1 < entries.length) {
       referenced.add(i + 1);
     }
     if (e.branches) e.branches.forEach(b => {
@@ -1411,6 +1442,15 @@ function computeWarnings() {
     // Unreachable node
     if (i > 0 && !referenced.has(i)) {
       warnings.push({ severity: 'warn', title: label, desc: 'unreachable — no other node points here', idx: i });
+    }
+
+    // Link warnings
+    if (e.type === 'link') {
+      if (!e.target || !e.target.trim()) {
+        warnings.push({ severity: 'error', title: label, desc: 'link has no target — set a script stem to link to', idx: i });
+      } else if (/\.json$/i.test(e.target)) {
+        warnings.push({ severity: 'warn', title: label, desc: `target "${e.target}" ends with .json — the target should be a stem (e.g. "${e.target.replace(/\.json$/i,'')}")`, idx: i });
+      }
     }
 
     // Direct mode with message
