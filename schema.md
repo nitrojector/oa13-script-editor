@@ -1,4 +1,4 @@
-# Schema
+<a align="center" href="https://www.notion.so/Schema-32f26c5e63ba808bb924fc45e3718274?pvs=21">Notion Page</a>
 
 ## File Structure
 
@@ -8,7 +8,7 @@
 */
 
 {
-	"version": 2,
+	"version": 3,
 	"script": [
 		{
 			/* script entry */
@@ -20,7 +20,7 @@
 ## Script Entry
 
 <aside>
-<img src="https://www.notion.so/icons/alert_green.svg" alt="https://www.notion.so/icons/alert_green.svg" width="40px" />
+<img src="/icons/alert_green.svg" alt="/icons/alert_green.svg" width="40px" />
 
 A Script Entry represents a unit of conversation or event in the game.
 A Script is a list of ordered Script Entries. An example is shown above.
@@ -70,11 +70,11 @@ Represents a single message sent by the the Boss / Pig / Senator / Player.
 
 The `type` field should be one of
 
-```jsx
-boss;
-pig;
-senator;
-player;
+```
+boss
+pig
+senator
+player
 ```
 
 #### **Minigame**
@@ -86,12 +86,20 @@ Represents a message that is linked to open a minigame (`gameId`)
 	"uid": "unique-id",
 	"type": "minigame",
 	"msg": "This is the link to the minigame etc.",
+	"direct": false, // can be omitted, default is false
+	"no-bid": false, // can be omitted, default is false
 	"gameId": 0,
 	"winBid": 1, // can be omitted, default is 1
 	"loseBid": 0, // can be omitted, default is 0
 	"next": "uid-of-next-entry"
 }
 ```
+
+**v3 changes:**
+
+- `direct`: if true, launches the minigame in direct mode.
+    - In direct mode, the minigame is launched immediately without sending a message and waiting for user interaction.
+- `no-bid`: if true, launches the mini-game but will not emit a bid on game end
 
 #### **Decision**
 
@@ -182,7 +190,7 @@ Messages are presented/saved as regular strings, with one quirk: strings can emb
 
 - `<d>deletion text</d>` **Deletion Tag**: Same as the idea strikethrough used in the Google Docs script. This tag signals that the enclosed text should be animated as typed it, then deleted.
 
-![Example excerpt from Day 3 in the script](image.png)
+![Example excerpt from Day 3 in the script](attachment:975ac594-32c9-43f9-80c7-8bb1f1cc6e5b:image.png)
 
 Example excerpt from Day 3 in the script
 
