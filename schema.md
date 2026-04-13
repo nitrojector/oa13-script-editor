@@ -49,6 +49,8 @@ branch
 
 day
 end
+
+link
 ```
 
 ### Entry Types
@@ -195,7 +197,7 @@ Allows linking one script to another.
 {
   "uid": "unique-id",
   "type": "link",
-  "target": "nextScript", // this would refer to nextScript.json
+  "target": "nextScript" // this would refer to nextScript.json
 }
 ```
 
