@@ -65,7 +65,7 @@ Represents a single message sent by the the Boss / Pig / Senator / Player.
 {
   "uid": "unique-id",
   "type": "senator",
-  "effect": 0.0,
+  "effect": 0.0, // can be omitted, default to 0
   "msg": "This is what the senator would say.",
   "next": "uid-of-next-entry"
 }
