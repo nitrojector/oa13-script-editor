@@ -375,7 +375,7 @@
 // ============================================================
 //  Editor version
 // ============================================================
-const EDITOR_VERSION = 4;
+const EDITOR_VERSION = 5;
 
 // ============================================================
 //  State
@@ -407,13 +407,15 @@ function resolveNextHint(idx) {
 //  Type definitions
 // ============================================================
 const TYPES = ['boss','pig','senator','player','minigame','decision','branch','day','end','link'];
-const TYPE_HAS_MSG   = new Set(['boss','pig','senator','player','minigame']);
-const TYPE_HAS_NEXT  = new Set(['boss','pig','senator','player','minigame','decision','day']);
+const TYPE_HAS_MSG    = new Set(['boss','pig','senator','player','minigame']);
+const TYPE_HAS_NEXT   = new Set(['boss','pig','senator','player','minigame','decision','day']);
+const TYPE_HAS_EFFECT = new Set(['boss','pig','senator','player']);
 const TYPE_KEEPS_UID = true;
 
 function defaultEntry(type) {
   const base = { uid: '', type };
   if (TYPE_HAS_MSG.has(type)) base.msg = '';
+  if (TYPE_HAS_EFFECT.has(type)) base.effect = 0;
   if (TYPE_HAS_NEXT.has(type)) base.next = '';
   if (type === 'minigame') { base.gameId = 0; base.winBid = 1; base.loseBid = 0; base.winEffect = 0; base.loseEffect = 0; base.direct = false; base['no-bid'] = false; }
   if (type === 'decision') { base.options = [{ msg: '', effect: 0, bid: 0 }]; }
@@ -566,6 +568,15 @@ function buildEntryForm(e, i, uidIssue) {
       <textarea data-field="msg" data-idx="${i}">${e.msg||''}</textarea></div>`;
   }
 
+  if (TYPE_HAS_EFFECT.has(e.type)) {
+    html += `<div class="field-row-inline">
+      <div class="field-row"><label>Effect <span style="color:var(--text2);font-size:0.68rem">(suspicion adjustment)</span></label>
+        <input type="number" step="0.01" data-field="effect" data-idx="${i}" value="${e.effect??0}">
+      </div>
+      <div style="flex:2"></div>
+    </div>`;
+  }
+
   if (e.type === 'minigame') {
     const noBidNote = e['no-bid'] ? ` <span style="color:var(--warn);font-size:0.68rem">&#9888; ignored (no-bid)</span>` : '';
     html += `<div class="field-row-inline">
@@ -708,6 +719,7 @@ function onFieldChange(ev) {
 
   if (field === 'uid')    { entry.uid = el.value.trim(); refreshUidValidation(); return; }
   if (field === 'msg')    { entry.msg = el.value; renderGraph(); return; }
+  if (field === 'effect') { entry.effect = +el.value; return; }
   if (field === 'next') {
     entry.next = el.value.trim();
     const hint = document.getElementById(`next-hint-${idx}`);
@@ -751,6 +763,9 @@ function getLostFields(entry, newType) {
   const lost = [];
   if (entry.msg && !TYPE_HAS_MSG.has(newType)) {
     if (entry.msg.trim()) lost.push(`msg ("${entry.msg.slice(0,20)}...")`);
+  }
+  if (TYPE_HAS_EFFECT.has(entry.type) && !TYPE_HAS_EFFECT.has(newType) && (entry.effect ?? 0) !== 0) {
+    lost.push(`effect (${entry.effect})`);
   }
   if (entry.options && entry.options.length && newType !== 'decision') lost.push('options');
   if (entry.branches && entry.branches.length && newType !== 'branch') lost.push('branches');
@@ -932,17 +947,20 @@ function doImport(data) {
   const wasV1 = data.version === 1;
   const wasV2 = data.version === 2;
   const wasV3 = data.version === 3;
+  const wasV4 = data.version === 4;
   scriptData = { version: EDITOR_VERSION, script: data.script };
   markClean();
   document.getElementById('version-badge').textContent = 'v' + EDITOR_VERSION;
   document.getElementById('version-badge').style.color = '';
   document.getElementById('version-badge').style.borderColor = '';
   if (wasV1) {
-    toast('Imported v1 script as v4 — please review entries', 'warn');
+    toast('Imported v1 script as v5 — please review entries', 'warn');
   } else if (wasV2) {
-    toast('Imported v2 script, auto-upgraded to v4', 'success');
+    toast('Imported v2 script, auto-upgraded to v5', 'success');
   } else if (wasV3) {
-    toast('Imported v3 script, auto-upgraded to v4', 'success');
+    toast('Imported v3 script, auto-upgraded to v5', 'success');
+  } else if (wasV4) {
+    toast('Imported v4 script, auto-upgraded to v5', 'success');
   } else {
     toast('Imported successfully', 'success');
   }
@@ -990,6 +1008,7 @@ function buildExportData() {
     const out = {};
     if (e.uid) out.uid = e.uid;
     out.type = e.type;
+    if (TYPE_HAS_EFFECT.has(e.type) && (e.effect ?? 0) !== 0) out.effect = e.effect;
     if (e.msg !== undefined && e.msg !== '') out.msg = e.msg;
     if (e.type === 'minigame') {
       out.gameId = e.gameId ?? 0;
