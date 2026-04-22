@@ -1,3 +1,5 @@
+# Schema `v5`
+
 <a align="center" href="https://www.notion.so/Script-Schema-32f26c5e63ba8068b513e8403bff413c">Notion Page</a>
 
 ## File Structure
@@ -8,7 +10,7 @@
 */
 
 {
-  "version": 4,
+  "version": 5,
   "script": [
     { /* script entry */ }
   ]
@@ -63,6 +65,7 @@ Represents a single message sent by the the Boss / Pig / Senator / Player.
 {
   "uid": "unique-id",
   "type": "senator",
+  "effect": 0.0,
   "msg": "This is what the senator would say.",
   "next": "uid-of-next-entry"
 }
@@ -76,6 +79,10 @@ pig
 senator
 player
 ```
+
+**v5 changes**
+
+- `effect`: messaging entries now can have suspicion adjustment applied after
 
 #### **Minigame**
 
